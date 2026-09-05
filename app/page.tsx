@@ -41,6 +41,7 @@ export default function Home() {
   const [, setConnectionStatus] = useState(auth ? "Checking Firebase session" : "Add Firebase keys to sign in");
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
   const [conversationMenuOpen, setConversationMenuOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -203,7 +204,8 @@ export default function Home() {
   }
 
   async function handleSignOut() {
-    if (!auth) return;
+    if (!auth || isSigningOut) return;
+    setIsSigningOut(true);
     setUserId(null);
     setFirebaseUser(null);
     setConversations([]);
@@ -223,13 +225,13 @@ export default function Home() {
       <header className="topbar">
         <button className="mobile-menu" aria-label="Open conversation history" aria-expanded={mobileSidebarOpen} onClick={() => setMobileSidebarOpen((open) => !open)}>☰</button>
         <div className="wordmark"><BrandMark logoUrl={brand.logo_url} /><span>{brand.brand_name.toLowerCase()}</span></div>
-        <div className="topbar-right">{firebaseUser ? <div className="profile-menu-wrap"><button className="profile-button" aria-label="Open profile" aria-expanded={profileOpen} onClick={() => setProfileOpen((open) => !open)}>{firebaseUser.photoURL ? <span className="profile-photo" role="img" aria-label="Profile photo" style={{ backgroundImage: `url(${firebaseUser.photoURL})` }} /> : firebaseUser.displayName?.slice(0, 1).toUpperCase() ?? "A"}</button>{profileOpen && <div className="profile-menu"><strong>{firebaseUser.displayName || "Your profile"}</strong><span>{firebaseUser.email}</span><button type="button" onClick={() => void handleSignOut()}>Sign out</button></div>}</div> : <div className="auth-actions"><Link href="/login">Log in</Link><Link href="/signup" className="auth-action-primary">Sign up</Link></div>}</div>
+        <div className="topbar-right">{firebaseUser ? <div className="profile-menu-wrap"><button className="profile-button" aria-label="Open profile" aria-expanded={profileOpen} onClick={() => { setProfileOpen((open) => !open); setHistoryMenuOpen(false); setConversationMenuOpen(false); }}>{firebaseUser.photoURL ? <span className="profile-photo" role="img" aria-label="Profile photo" style={{ backgroundImage: `url(${firebaseUser.photoURL})` }} /> : firebaseUser.displayName?.slice(0, 1).toUpperCase() ?? "A"}</button>{profileOpen && <div className="profile-menu"><strong>{firebaseUser.displayName || "Your profile"}</strong><span>{firebaseUser.email}</span><button type="button" disabled={isSigningOut} onClick={() => void handleSignOut()}>{isSigningOut ? "Signing out..." : "Sign out"}</button></div>}</div> : <div className="auth-actions"><Link href="/login">Log in</Link><Link href="/signup" className="auth-action-primary">Sign up</Link></div>}</div>
       </header>
       <div className="workspace">
         <aside className={`sidebar ${mobileSidebarOpen ? "mobile-open" : ""}`}>
           <button className="new-chat" onClick={startNewChat}><span>+</span> New chat</button>
           <label className="search-box"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search lessons" aria-label="Search lessons" /><kbd>⌘ K</kbd></label>
-          <div className="history-heading"><span>Your learning</span><div className="menu-wrap"><button aria-label="More history options" aria-expanded={historyMenuOpen} onClick={() => setHistoryMenuOpen((open) => !open)}>•••</button>{historyMenuOpen && <div className="small-menu"><button onClick={() => { setConversations([]); setSelectedId(null); setHistoryMenuOpen(false); }}>Clear local history</button><button onClick={() => { startNewChat(); setHistoryMenuOpen(false); }}>New learning session</button></div>}</div></div>
+          <div className="history-heading"><span>Your learning</span><div className="menu-wrap"><button aria-label="More history options" aria-expanded={historyMenuOpen} onClick={() => { setHistoryMenuOpen((open) => !open); setProfileOpen(false); setConversationMenuOpen(false); }}>•••</button>{historyMenuOpen && <div className="small-menu"><button onClick={() => { setConversations([]); setSelectedId(null); setHistoryMenuOpen(false); }}>Clear local history</button><button onClick={() => { startNewChat(); setHistoryMenuOpen(false); }}>New learning session</button></div>}</div></div>
           <div className="conversation-list">
             <p className="group-label">Today</p>
             {filteredConversations.slice(0, 2).map((conversation) => <ConversationItem key={conversation.id} conversation={conversation} active={conversation.id === selectedId} onClick={() => { setSelectedId(conversation.id); setMobileSidebarOpen(false); }} onDelete={() => void deleteConversation(conversation.id)} />)}
@@ -240,7 +242,7 @@ export default function Home() {
         </aside>
 
         <section className="chat-area">
-          <div className="chat-heading"><div><span className="eyebrow">LEARNING SESSION</span><h1>{selected.title}</h1></div><div className="menu-wrap"><button className="more-button" aria-label="Conversation options" aria-expanded={conversationMenuOpen} onClick={() => setConversationMenuOpen((open) => !open)}>•••</button>{conversationMenuOpen && <div className="small-menu conversation-menu"><button onClick={() => { startNewChat(); setConversationMenuOpen(false); }}>New learning session</button><button onClick={() => { setInput(""); setConversationMenuOpen(false); }}>Clear composer</button></div>}</div></div>
+          <div className="chat-heading"><div><span className="eyebrow">LEARNING SESSION</span><h1>{selected.title}</h1></div><div className="menu-wrap"><button className="more-button" aria-label="Conversation options" aria-expanded={conversationMenuOpen} onClick={() => { setConversationMenuOpen((open) => !open); setProfileOpen(false); setHistoryMenuOpen(false); }}>•••</button>{conversationMenuOpen && <div className="small-menu conversation-menu"><button onClick={() => { startNewChat(); setConversationMenuOpen(false); }}>New learning session</button><button onClick={() => { setInput(""); setConversationMenuOpen(false); }}>Clear composer</button></div>}</div></div>
           <div className={`message-scroll ${isEmpty ? "empty-scroll" : ""}`}>
             {isEmpty ? <EmptyState onSuggestion={selectSuggestion} /> : <div className="messages">{selected.messages.map((message) => <MessageBubble key={message.id} message={message} />)}{isThinking && <div className="thinking"><span /><span /><span /> Samjho is thinking</div>}</div>}
           </div>
