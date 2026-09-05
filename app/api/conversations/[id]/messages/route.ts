@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyFirebaseRequest } from "@/lib/firebase/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
+export const runtime = "nodejs";
+
 async function getOwnedConversation(id: string, userId: string) {
   const supabase = getSupabaseServerClient();
   if (!supabase) return { supabase: null, conversation: null };

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyFirebaseRequest } from "@/lib/firebase/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
+export const runtime = "nodejs";
+
 export async function GET(request: NextRequest) {
   const token = await verifyFirebaseRequest(request);
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

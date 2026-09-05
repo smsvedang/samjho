@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyFirebaseRequest } from "@/lib/firebase/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
+export const runtime = "nodejs";
+
 function isAdmin(decodedToken: { admin?: boolean; role?: string }) {
   return decodedToken.admin === true || decodedToken.role === "admin";
 }

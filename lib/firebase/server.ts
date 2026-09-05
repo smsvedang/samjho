@@ -3,14 +3,18 @@ import { getAuth } from "firebase-admin/auth";
 import type { NextRequest } from "next/server";
 
 function getFirebaseAdminAuth() {
-  if (!getApps().length) {
-    const projectId = process.env.FIREBASE_PROJECT_ID;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-    if (!projectId || !clientEmail || !privateKey) return null;
-    initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+  try {
+    if (!getApps().length) {
+      const projectId = process.env.FIREBASE_PROJECT_ID;
+      const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+      const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+      if (!projectId || !clientEmail || !privateKey) return null;
+      initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
+    }
+    return getAuth();
+  } catch {
+    return null;
   }
-  return getAuth();
 }
 
 export async function verifyFirebaseRequest(request: NextRequest) {
