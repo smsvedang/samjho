@@ -31,12 +31,18 @@ export async function POST(request: NextRequest) {
   if (prompt.length > settings.max_input_length) return NextResponse.json({ error: `Keep your question under ${settings.max_input_length} characters.` }, { status: 400 });
 
   const context = (body.messages ?? []).filter((message) => message.role === "user" || message.role === "assistant").slice(-settings.max_context_messages);
-  const system = `You are ${settings.brand_name}, an adaptive AI tutor. Teach for understanding, not just answers. Use ${settings.default_language} unless the learner asks for another language. ${settings.tutor_instructions} Available teaching strategies: ${settings.enabled_strategies.join(", ")}. Be accurate, clear, and concise. Ask a useful follow-up question when appropriate.`;
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile", temperature: 0.7, max_tokens: 900, messages: [{ role: "system", content: system }, ...context, { role: "user", content: prompt }] }),
-  });
+  const system = `You are ${settings.brand_name}, an adaptive AI tutor. Teach for understanding, not just answers. Use ${settings.default_language} unless the learner asks for another language. ${settings.tutor_instructions} Available teaching strategies: ${settings.enabled_strategies.join(", ")}. Be accurate, clear, and concise. Ask a useful follow-up question when appropriate. Format math with Markdown-compatible LaTeX: use $...$ for inline math and $$...$$ for display math. Do not wrap formulas in plain square brackets, and do not escape subscript underscores inside math. For example, write $$\\sum_{i=1}^{n} V_i = 0$$.`;
+  let response: Response;
+  try {
+    response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: process.env.GROQ_MODEL || "openai/gpt-oss-120b", reasoning_effort: "low", temperature: 0.7, max_tokens: 1200, messages: [{ role: "system", content: system }, ...context, { role: "user", content: prompt }] }),
+    });
+  } catch (error) {
+    console.error("Groq request could not be reached", error);
+    return NextResponse.json({ error: "The tutor is temporarily unavailable" }, { status: 502 });
+  }
   if (!response.ok) {
     console.error("Groq request failed", response.status, await response.text());
     return NextResponse.json({ error: "The tutor is temporarily unavailable" }, { status: 502 });

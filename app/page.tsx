@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import rehypeKatex from "rehype-katex";
+import remarkMath from "remark-math";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 
@@ -37,6 +40,7 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [input, setInput] = useState("");
   const [isThinking, setIsThinking] = useState(false);
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [, setConnectionStatus] = useState(auth ? "Checking Firebase session" : "Add Firebase keys to sign in");
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
@@ -48,7 +52,7 @@ export default function Home() {
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [brand, setBrand] = useState<BrandSettings>({ brand_name: "Samjho", logo_url: "", tagline: "AI that teaches, not just answers." });
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? { id: "draft", title: "New learning session", time: "Not saved", messages: [] };
-  const isEmpty = selected.messages.length === 0;
+  const isEmpty = selected.messages.length === 0 && !pendingPrompt;
   const filteredConversations = useMemo(
     () => conversations.filter((conversation) => conversation.title.toLowerCase().includes(search.toLowerCase())),
     [conversations, search],
@@ -141,6 +145,8 @@ export default function Home() {
       setLoginPromptOpen(true);
       return;
     }
+    setPendingPrompt(prompt);
+    setIsThinking(true);
     const title = selected.messages.length ? selected.title : prompt.slice(0, 28);
     let conversationId = selectedId;
     const token = await firebaseUser.getIdToken();
@@ -149,17 +155,19 @@ export default function Home() {
       const data = response.ok ? await response.json() : null;
       if (!data) {
         setConnectionStatus("Could not create lesson");
+        setPendingPrompt(null);
+        setIsThinking(false);
         return;
       }
       conversationId = data.id;
       setSelectedId(conversationId);
       setConversations((current) => [{ id: data.id, title: data.title, time: "Just now", messages: [] }, ...current.filter((conversation) => !conversation.id.startsWith("draft-"))]);
     }
-    setIsThinking(true);
     const tutorResponse = await fetch("/api/tutor", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ prompt, messages: selected.messages.map(({ role, content }) => ({ role, content })) }) });
     if (!tutorResponse.ok) {
       const error = await tutorResponse.json().catch(() => null) as { error?: string } | null;
       setConnectionStatus(error?.error || "The tutor is temporarily unavailable");
+      setPendingPrompt(null);
       setIsThinking(false);
       return;
     }
@@ -167,12 +175,14 @@ export default function Home() {
     const messageResponse = await fetch(`/api/conversations/${conversationId}/messages`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ messages: [{ role: "user", content: prompt }, { role: "assistant", content: assistantContent }] }) });
     if (!messageResponse.ok) {
       setConnectionStatus("Could not save this lesson");
+      setPendingPrompt(null);
       setIsThinking(false);
       return;
     }
     const savedMessages = messageResponse.ok ? await messageResponse.json() : [];
     const messages = (savedMessages ?? []).map((message: { id: string; role: string; content: string }) => ({ id: message.id, role: message.role as Message["role"], content: message.content }));
     setConversations((current) => current.map((conversation) => conversation.id === conversationId ? { ...conversation, title, time: "Just now", messages: [...conversation.messages, ...messages] } : conversation));
+    setPendingPrompt(null);
     setInput("");
     setConnectionStatus("Synced with Firebase");
     window.setTimeout(() => setIsThinking(false), 650);
@@ -244,7 +254,7 @@ export default function Home() {
         <section className="chat-area">
           <div className="chat-heading"><div><span className="eyebrow">LEARNING SESSION</span><h1>{selected.title}</h1></div><div className="menu-wrap"><button className="more-button" aria-label="Conversation options" aria-expanded={conversationMenuOpen} onClick={() => { setConversationMenuOpen((open) => !open); setProfileOpen(false); setHistoryMenuOpen(false); }}>•••</button>{conversationMenuOpen && <div className="small-menu conversation-menu"><button onClick={() => { startNewChat(); setConversationMenuOpen(false); }}>New learning session</button><button onClick={() => { setInput(""); setConversationMenuOpen(false); }}>Clear composer</button></div>}</div></div>
           <div className={`message-scroll ${isEmpty ? "empty-scroll" : ""}`}>
-            {isEmpty ? <EmptyState onSuggestion={selectSuggestion} /> : <div className="messages">{selected.messages.map((message) => <MessageBubble key={message.id} message={message} />)}{isThinking && <div className="thinking"><span /><span /><span /> Samjho is thinking</div>}</div>}
+            {isEmpty ? <EmptyState onSuggestion={selectSuggestion} /> : <div className="messages">{selected.messages.map((message) => <MessageBubble key={message.id} message={message} />)}{pendingPrompt && <MessageBubble message={{ id: "pending-user", role: "user", content: pendingPrompt }} />}{isThinking && <ThinkingIndicator />}</div>}
           </div>
           <div className="composer-wrap">
             {!isEmpty && <div className="quick-actions"><button onClick={() => setQuickAction("Make it simpler")}>Make it simpler</button><button onClick={() => setQuickAction("Give another real-life example")}>Another example</button><button onClick={() => setQuickAction("Test me")}>Test me</button></div>}
@@ -271,5 +281,24 @@ function EmptyState({ onSuggestion }: { onSuggestion: (prompt: string) => void }
 }
 
 function MessageBubble({ message }: { message: Message }) {
-  return <article className={`message ${message.role}`}><div className="message-avatar">{message.role === "assistant" ? "s" : "A"}</div><div className="message-content">{message.role === "assistant" && <span className="assistant-label">SAMJHO <span>✦</span></span>}{message.content.split("\n").map((line, index) => line ? <p key={index}>{line}</p> : <br key={index} />)}</div></article>;
+  return <article className={`message ${message.role}`}><div className="message-avatar">{message.role === "assistant" ? "s" : "A"}</div><div className="message-content">{message.role === "assistant" && <span className="assistant-label">SAMJHO <span>✦</span></span>}{message.role === "assistant" ? <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizeMathDelimiters(message.content)}</ReactMarkdown> : message.content.split("\n").map((line, index) => line ? <p key={index}>{line}</p> : <br key={index} />)}</div></article>;
+}
+
+function ThinkingIndicator() {
+  return <div className="thinking"><span /><span /><span /> Samjho is thinking</div>;
+}
+
+function normalizeMathDelimiters(content: string) {
+  return content
+    .replace(/^\s*\[\s*((?=[^\]]*(?:\\[a-zA-Z]+|[_^=]))[^\]]+?)\s*\]\s*$/gm, (_, math: string) => `$$${normalizeMathContent(math)}$$`)
+    .replaceAll("\\[", "$$")
+    .replaceAll("\\]", "$$")
+    .replaceAll("\\(", "$")
+    .replaceAll("\\)", "$")
+    .replace(/\$\$([\s\S]*?)\$\$/g, (_, math: string) => `$$${normalizeMathContent(math)}$$`)
+    .replace(/\$([^$\n]+?)\$/g, (_, math: string) => `$${normalizeMathContent(math)}$`);
+}
+
+function normalizeMathContent(math: string) {
+  return math.replaceAll("\\_", "_").trim();
 }
