@@ -7,7 +7,8 @@ export const runtime = "nodejs";
 async function getOwnedConversation(id: string, userId: string) {
   const supabase = getSupabaseServerClient();
   if (!supabase) return { supabase: null, conversation: null };
-  const { data: conversation } = await supabase.from("conversations").select("id, title").eq("id", id).eq("user_id", userId).single();
+  const { data: conversation, error } = await supabase.from("conversations").select("id, title").eq("id", id).eq("user_id", userId).single();
+  if (error) console.error("Failed to load owned conversation", error);
   return { supabase, conversation };
 }
 
@@ -19,7 +20,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   if (!supabase) return NextResponse.json({ error: "Database is not configured" }, { status: 503 });
   if (!conversation) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { data, error } = await supabase.from("messages").select("id, role, content").eq("conversation_id", id).order("created_at", { ascending: true });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("Failed to load messages", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json(data ?? []);
 }
 
@@ -33,6 +37,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const { messages } = await request.json();
   const rows = (messages ?? []).map((message: { role: string; content: string }) => ({ conversation_id: id, user_id: token.uid, role: message.role, content: message.content }));
   const { data, error } = await supabase.from("messages").insert(rows).select("id, role, content");
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("Failed to save messages", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", id).eq("user_id", token.uid);
   return NextResponse.json(data ?? []);
 }

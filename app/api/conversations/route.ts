@@ -9,9 +9,17 @@ export async function GET(request: NextRequest) {
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const supabase = getSupabaseServerClient();
   if (!supabase) return NextResponse.json({ error: "Database is not configured" }, { status: 503 });
-  const { data, error } = await supabase.from("conversations").select("id, title, updated_at").eq("user_id", token.uid).order("updated_at", { ascending: false });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(data ?? []);
+  try {
+    const { data, error } = await supabase.from("conversations").select("id, title, updated_at").eq("user_id", token.uid).order("updated_at", { ascending: false });
+    if (error) {
+      console.error("Failed to load conversations", { code: error.code, message: error.message, details: error.details, hint: error.hint });
+      return NextResponse.json({ error: "Conversation storage is temporarily unavailable" }, { status: 503 });
+    }
+    return NextResponse.json(data ?? []);
+  } catch (error) {
+    console.error("Conversation storage request failed", error);
+    return NextResponse.json({ error: "Conversation storage is temporarily unavailable" }, { status: 503 });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -21,6 +29,24 @@ export async function POST(request: NextRequest) {
   if (!supabase) return NextResponse.json({ error: "Database is not configured" }, { status: 503 });
   const { title } = await request.json();
   const { data, error } = await supabase.from("conversations").insert({ user_id: token.uid, title: title || "New learning session" }).select("id, title, updated_at").single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("Failed to create conversation", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json(data);
+}
+
+export async function DELETE(request: NextRequest) {
+  const token = await verifyFirebaseRequest(request);
+  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return NextResponse.json({ error: "Database is not configured" }, { status: 503 });
+  const id = new URL(request.url).searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Conversation id is required" }, { status: 400 });
+  const { error } = await supabase.from("conversations").delete().eq("id", id).eq("user_id", token.uid);
+  if (error) {
+    console.error("Failed to delete conversation", error);
+    return NextResponse.json({ error: "Could not delete conversation" }, { status: 500 });
+  }
+  return new NextResponse(null, { status: 204 });
 }

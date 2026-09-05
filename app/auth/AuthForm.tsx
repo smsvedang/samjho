@@ -14,6 +14,7 @@ import {
 import { getFirebaseAuth } from "@/lib/firebase/client";
 
 type AuthMode = "login" | "signup";
+type BrandSettings = { brand_name: string; logo_url: string; tagline: string };
 
 export default function AuthForm({ mode }: { mode: AuthMode }) {
   const router = useRouter();
@@ -25,11 +26,16 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [brand, setBrand] = useState<BrandSettings>({ brand_name: "Samjho", logo_url: "", tagline: "AI that teaches, not just answers." });
 
   useEffect(() => {
     if (!auth) return;
     if (auth.currentUser) router.replace("/");
   }, [auth, router]);
+
+  useEffect(() => {
+    void fetch("/api/public-settings").then((response) => response.ok ? response.json() : null).then((data) => { if (data) setBrand(data); }).catch(() => undefined);
+  }, []);
 
   function firebaseMessage(code: string) {
     const messages: Record<string, string> = {
@@ -107,9 +113,9 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
 
   return (
     <main className="auth-shell">
-      <header className="auth-topbar"><Link href="/" className="wordmark"><span className="wordmark-mark">s</span><span>samjho</span></Link><Link href="/" className="auth-close" aria-label="Back to learning">×</Link></header>
+      <header className="auth-topbar"><Link href="/" className="wordmark"><span className="wordmark-mark" style={brand.logo_url ? { backgroundImage: `url(${brand.logo_url})`, backgroundSize: "cover", backgroundPosition: "center", color: "transparent" } : undefined}>s</span><span>{brand.brand_name.toLowerCase()}</span></Link><Link href="/" className="auth-close" aria-label="Back to learning">×</Link></header>
       <section className="auth-layout">
-        <div className="auth-story"><span className="eyebrow">YOUR NEXT AHA MOMENT</span><h1>Understanding feels better when it <em>clicks.</em></h1><p>Join Samjho and learn with an AI tutor that changes how it explains until the idea makes sense.</p><div className="auth-note"><span className="auth-note-mark">✦</span><span>Simple explanations. Better questions. Real understanding.</span></div></div>
+        <div className="auth-story"><span className="eyebrow">YOUR NEXT AHA MOMENT</span><h1>Understanding feels better when it <em>clicks.</em></h1><p>{brand.tagline}</p><div className="auth-note"><span className="auth-note-mark">✦</span><span>Simple explanations. Better questions. Real understanding.</span></div></div>
         <div className="auth-card"><div className="auth-card-heading"><span className="eyebrow">{isSignup ? "START LEARNING" : "WELCOME BACK"}</span><h2>{isSignup ? "Create your space" : "Good to see you"}</h2><p>{isSignup ? "Your learning journey starts here." : "Pick up right where you left off."}</p></div><button className="google-button" type="button" onClick={signInWithGoogle} disabled={isLoading}><span className="google-icon">G</span>{isSignup ? "Continue with Google" : "Sign in with Google"}</button><div className="auth-divider"><span>or continue with email</span></div><form onSubmit={submit}>{isSignup && <label className="auth-label">Your name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="Aarav Sharma" autoComplete="name" /></label>}<label className="auth-label">Email address<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" autoComplete="email" required /></label><label className="auth-label">Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder={isSignup ? "At least 6 characters" : "Your password"} autoComplete={isSignup ? "new-password" : "current-password"} minLength={6} required /></label>{!isSignup && <button className="forgot-button" type="button" onClick={resetPassword}>Forgot password?</button>}{error && <p className="auth-error" role="alert">{error}</p>}{notice && <p className="auth-notice" role="status">{notice}</p>}<button className="auth-submit" type="submit" disabled={isLoading}>{isLoading ? "One moment..." : isSignup ? "Create account" : "Sign in"}<span>→</span></button></form><p className="auth-switch">{isSignup ? "Already have an account?" : "New to Samjho?"} <Link href={isSignup ? "/login" : "/signup"}>{isSignup ? "Sign in" : "Create an account"}</Link></p><p className="auth-terms">By continuing, you agree to learn thoughtfully with Samjho.</p></div>
       </section>
     </main>
