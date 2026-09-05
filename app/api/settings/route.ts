@@ -1,0 +1,28 @@
+import { NextRequest, NextResponse } from "next/server";
+import { verifyFirebaseRequest } from "@/lib/firebase/server";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+
+function isAdmin(decodedToken: { admin?: boolean; role?: string }) {
+  return decodedToken.admin === true || decodedToken.role === "admin";
+}
+
+export async function GET(request: NextRequest) {
+  const token = await verifyFirebaseRequest(request);
+  if (!token || !isAdmin(token as typeof token & { admin?: boolean; role?: string })) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return NextResponse.json({ error: "Database is not configured" }, { status: 503 });
+  const { data, error } = await supabase.from("app_settings").select("*").eq("id", 1).single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data);
+}
+
+export async function PUT(request: NextRequest) {
+  const token = await verifyFirebaseRequest(request);
+  if (!token || !isAdmin(token as typeof token & { admin?: boolean; role?: string })) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return NextResponse.json({ error: "Database is not configured" }, { status: 503 });
+  const body = await request.json();
+  const { data, error } = await supabase.from("app_settings").upsert({ id: 1, ...body, updated_at: new Date().toISOString() }).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data);
+}
