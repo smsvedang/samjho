@@ -1,9 +1,5 @@
 import type { NextRequest } from "next/server";
 
-function normalizePrivateKey(value: string | undefined) {
-  return value?.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
-}
-
 async function getFirebaseAdminAuth() {
   try {
     const [{ cert, getApps, initializeApp }, { getAuth }] = await Promise.all([
@@ -13,7 +9,7 @@ async function getFirebaseAdminAuth() {
     if (!getApps().length) {
       const projectId = process.env.FIREBASE_PROJECT_ID;
       const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-      const privateKey = normalizePrivateKey(process.env.FIREBASE_PRIVATE_KEY);
+      const privateKey = process.env.FIREBASE_PRIVATE_KEY?.trim().replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
       if (!projectId || !clientEmail || !privateKey) return null;
       initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
     }
