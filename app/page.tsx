@@ -86,6 +86,12 @@ export default function Home() {
         clearSessionState();
         return;
       }
+      if (!user.emailVerified && user.providerData.some((provider) => provider.providerId === "password")) {
+        clearSessionState();
+        await signOut(auth);
+        router.replace("/login");
+        return;
+      }
       setUserId(user.uid);
       try {
         const token = await user.getIdToken();
@@ -112,7 +118,7 @@ export default function Home() {
       currentLoad?.abort();
       unsubscribe();
     };
-  }, [auth]);
+  }, [auth, router]);
 
   useEffect(() => {
     const controller = new AbortController();

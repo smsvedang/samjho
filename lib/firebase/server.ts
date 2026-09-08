@@ -26,7 +26,9 @@ export async function verifyFirebaseRequest(request: NextRequest) {
   const auth = await getFirebaseAdminAuth();
   if (!auth) return null;
   try {
-    return await auth.verifyIdToken(token);
+    const decodedToken = await auth.verifyIdToken(token);
+    if (decodedToken.firebase?.sign_in_provider === "password" && decodedToken.email_verified !== true) return null;
+    return decodedToken;
   } catch (error) {
     console.error("Firebase token verification failed", error);
     return null;

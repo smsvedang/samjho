@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signOut,
   updateProfile,
 } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase/client";
@@ -40,6 +42,7 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
   function firebaseMessage(code: string) {
     const messages: Record<string, string> = {
       "auth/invalid-credential": "Email or password is incorrect.",
+      "auth/user-not-found": "Email or password is incorrect.",
       "auth/email-already-in-use": "An account already exists with this email.",
       "auth/weak-password": "Use a password with at least 6 characters.",
       "auth/invalid-email": "Enter a valid email address.",
@@ -85,10 +88,19 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
       if (isSignup) {
         const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
         await updateProfile(credential.user, { displayName: name.trim() });
+        await sendEmailVerification(credential.user);
+        await signOut(auth);
+        setNotice(`Verification email sent to ${email.trim()}. Verify your email before signing in.`);
       } else {
-        await signInWithEmailAndPassword(auth, email.trim(), password);
+        const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+        if (!credential.user.emailVerified && credential.user.providerData.some((provider) => provider.providerId === "password")) {
+          await signOut(auth);
+          setNotice(`Please verify ${email.trim()} before signing in. Check your inbox for the verification email.`);
+          return;
+        }
+        router.replace("/");
       }
-      router.replace("/");
+      if (isSignup) return;
     } catch (firebaseError) {
       setError(firebaseMessage((firebaseError as { code?: string }).code ?? ""));
     } finally {
