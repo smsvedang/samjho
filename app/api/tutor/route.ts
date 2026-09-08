@@ -5,6 +5,30 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
+type WorksheetQuestion = { question: string; options?: string[]; answer?: string };
+type Worksheet = { title: string; subject: string; instructions: string; questions: WorksheetQuestion[]; answerKey?: string[] };
+
+function isWorksheetRequest(prompt: string) {
+  return /\b(questions?|quiz|test|worksheet|practice problems?|mcqs?|question paper)\b|प्रश्न|सवाल|questions?\s+(bana|make|generate|create)|प्रश्न\s*(बना|बनाओ|तैयार)/i.test(prompt);
+}
+
+function parseWorksheet(content: string): Worksheet | null {
+  const candidate = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  try {
+    const parsed = JSON.parse(candidate) as Partial<Worksheet>;
+    if (!parsed.title || !Array.isArray(parsed.questions) || parsed.questions.length === 0) return null;
+    const questions = parsed.questions.filter((question): question is WorksheetQuestion => Boolean(question && typeof question.question === "string"));
+    return questions.length ? { title: parsed.title, subject: parsed.subject || "", instructions: parsed.instructions || "Answer each question.", questions, answerKey: parsed.answerKey } : null;
+  } catch {
+    return null;
+  }
+}
+
+function worksheetMarkdown(worksheet: Worksheet) {
+  const marker = `<!-- SAMJHO_WORKSHEET\n${JSON.stringify(worksheet)}\n-->`;
+  const questions = worksheet.questions.map((question, index) => `${index + 1}. ${question.question}${question.options?.length ? `\n   ${question.options.map((option) => `- ${option}`).join("\n   ")}` : "\n   \n   Answer: ______________________________"}`).join("\n\n");
+  return `${marker}\n\n## ${worksheet.title}\n\n${worksheet.instructions}\n\n${questions}`;
+}
 
 export async function POST(request: NextRequest) {
   const token = await verifyFirebaseRequest(request);
@@ -31,13 +55,17 @@ export async function POST(request: NextRequest) {
   if (prompt.length > settings.max_input_length) return NextResponse.json({ error: `Keep your question under ${settings.max_input_length} characters.` }, { status: 400 });
 
   const context = (body.messages ?? []).filter((message) => message.role === "user" || message.role === "assistant").slice(-settings.max_context_messages);
-  const system = `You are ${settings.brand_name}, an adaptive AI tutor. Teach for understanding, not just answers. Use ${settings.default_language} unless the learner asks for another language. ${settings.tutor_instructions} Available teaching strategies: ${settings.enabled_strategies.join(", ")}. Be accurate, clear, and concise. Ask a useful follow-up question when appropriate. Format math with Markdown-compatible LaTeX: use $...$ for inline math and $$...$$ for display math. Do not wrap formulas in plain square brackets, and do not escape subscript underscores inside math. For example, write $$\\sum_{i=1}^{n} V_i = 0$$.`;
+  const worksheetRequest = isWorksheetRequest(prompt);
+  const languageInstruction = `Detect the language of the learner's latest message and reply in that same language. The latest message has priority over older messages and the configured default. If the latest message is clearly English, reply entirely in English; if it is Hindi, reply in Hindi; if it is Hinglish, reply in natural Hinglish; and apply the same rule to any other language you can understand. Do not translate unless asked. Use ${settings.default_language} only when the message is too short or language-neutral to identify.`;
+  const system = worksheetRequest
+    ? `You are ${settings.brand_name}, an adaptive AI tutor. The learner wants a question worksheet. ${languageInstruction} Return ONLY valid JSON, with no Markdown or code fences, matching this shape: {"title":"...","subject":"...","instructions":"...","questions":[{"question":"...","options":["..."],"answer":"..."}],"answerKey":["..."]}. Generate 8-12 accurate, age-appropriate questions about the requested topic. Mix conceptual and application questions. Include options only for multiple-choice questions; omit options for open questions. Keep answers concise. Do not leave questions blank.`
+    : `You are ${settings.brand_name}, an adaptive AI tutor. Teach for understanding, not just answers. ${languageInstruction} ${settings.tutor_instructions} Available teaching strategies: ${settings.enabled_strategies.join(", ")}. Be accurate, clear, and concise. Ask a useful follow-up question when appropriate. Format math with Markdown-compatible LaTeX: use $...$ for inline math and $$...$$ for display math. Do not wrap formulas in plain square brackets, and do not escape subscript underscores inside math. For example, write $$\\sum_{i=1}^{n} V_i = 0$$.`;
   let response: Response;
   try {
     response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: process.env.GROQ_MODEL || "openai/gpt-oss-120b", reasoning_effort: "low", temperature: 0.7, max_tokens: 1200, messages: [{ role: "system", content: system }, ...context, { role: "user", content: prompt }] }),
+      body: JSON.stringify({ model: process.env.GROQ_MODEL || "openai/gpt-oss-120b", reasoning_effort: "low", temperature: worksheetRequest ? 0.4 : 0.7, max_tokens: worksheetRequest ? 3500 : 1200, messages: [{ role: "system", content: system }, ...(worksheetRequest ? [] : context), { role: "user", content: prompt }] }),
     });
   } catch (error) {
     console.error("Groq request could not be reached", error);
@@ -50,5 +78,10 @@ export async function POST(request: NextRequest) {
   const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
   const content = data.choices?.[0]?.message?.content?.trim();
   if (!content) return NextResponse.json({ error: "The tutor returned an empty answer" }, { status: 502 });
+  if (worksheetRequest) {
+    const worksheet = parseWorksheet(content);
+    if (!worksheet) return NextResponse.json({ error: "I could not format that worksheet. Please try the request again with a topic and class level." }, { status: 502 });
+    return NextResponse.json({ content: worksheetMarkdown(worksheet) });
+  }
   return NextResponse.json({ content });
 }

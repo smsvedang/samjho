@@ -16,6 +16,9 @@ type Message = {
   kind?: "intro" | "answer";
 };
 
+type WorksheetQuestion = { question: string; options?: string[]; answer?: string };
+type Worksheet = { title: string; subject: string; instructions: string; questions: WorksheetQuestion[]; answerKey?: string[] };
+
 type Conversation = {
   id: string;
   title: string;
@@ -287,7 +290,92 @@ function EmptyState({ onSuggestion }: { onSuggestion: (prompt: string) => void }
 }
 
 function MessageBubble({ message }: { message: Message }) {
-  return <article className={`message ${message.role}`}><div className="message-avatar">{message.role === "assistant" ? "s" : "A"}</div><div className="message-content">{message.role === "assistant" && <span className="assistant-label">SAMJHO <span>✦</span></span>}{message.role === "assistant" ? <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizeMathDelimiters(message.content)}</ReactMarkdown> : message.content.split("\n").map((line, index) => line ? <p key={index}>{line}</p> : <br key={index} />)}</div></article>;
+  const worksheet = message.role === "assistant" ? extractWorksheet(message.content) : null;
+  return <article className={`message ${message.role}`}><div className="message-avatar">{message.role === "assistant" ? "s" : "A"}</div><div className="message-content">{message.role === "assistant" && <span className="assistant-label">SAMJHO <span>✦</span></span>}{message.role === "assistant" ? <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizeMathDelimiters(message.content)}</ReactMarkdown> : message.content.split("\n").map((line, index) => line ? <p key={index}>{line}</p> : <br key={index} />)}{worksheet && <button className="worksheet-download" type="button" onClick={() => void downloadWorksheet(worksheet)}>Download worksheet PDF <span>↓</span></button>}</div></article>;
+}
+
+function extractWorksheet(content: string): Worksheet | null {
+  const match = content.match(/<!-- SAMJHO_WORKSHEET\s*([\s\S]*?)\s*-->/);
+  if (!match) return null;
+  try {
+    const worksheet = JSON.parse(match[1]) as Worksheet;
+    return worksheet.title && worksheet.questions?.length ? worksheet : null;
+  } catch {
+    return null;
+  }
+}
+
+async function downloadWorksheet(worksheet: Worksheet) {
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF({ unit: "pt", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 48;
+  let y = 54;
+
+  function ensureSpace(height: number) {
+    if (y + height > pageHeight - margin) {
+      pdf.addPage();
+      y = 54;
+    }
+  }
+
+  function write(text: string, size: number, color: [number, number, number], gap = 16) {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(size);
+    pdf.setTextColor(...color);
+    const lines = pdf.splitTextToSize(text, pageWidth - margin * 2) as string[];
+    ensureSpace(lines.length * gap);
+    pdf.text(lines, margin, y);
+    y += lines.length * gap;
+  }
+
+  pdf.setFillColor(35, 105, 93);
+  pdf.rect(0, 0, pageWidth, 18, "F");
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(11);
+  pdf.setTextColor(35, 105, 93);
+  pdf.text("SAMJHOAI", margin, y);
+  y += 28;
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(22);
+  pdf.setTextColor(27, 48, 42);
+  const titleLines = pdf.splitTextToSize(worksheet.title, pageWidth - margin * 2) as string[];
+  pdf.text(titleLines, margin, y);
+  y += titleLines.length * 26 + 8;
+  if (worksheet.subject) write(worksheet.subject, 10, [96, 116, 107], 14);
+  write(worksheet.instructions, 11, [72, 87, 80], 16);
+  y += 10;
+  worksheet.questions.forEach((question, index) => {
+    const optionText = question.options?.map((option, optionIndex) => `${String.fromCharCode(65 + optionIndex)}. ${option}`).join("\n") || "Answer: ______________________________________________";
+    const questionText = `${index + 1}. ${question.question}\n${optionText}`;
+    const lines = pdf.splitTextToSize(questionText, pageWidth - margin * 2 - 12) as string[];
+    ensureSpace(lines.length * 16 + 14);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(11);
+    pdf.setTextColor(27, 48, 42);
+    pdf.text(lines, margin, y);
+    y += lines.length * 16 + 14;
+  });
+  if (worksheet.answerKey?.length) {
+    ensureSpace(48);
+    y += 10;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.text("Answer key", margin, y);
+    y += 22;
+    write(worksheet.answerKey.map((answer, index) => `${index + 1}. ${answer}`).join("   "), 10, [72, 87, 80], 15);
+  }
+  const pageCount = pdf.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page += 1) {
+    pdf.setPage(page);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(140, 150, 145);
+    pdf.text("SamjhoAI - Learn with understanding", margin, pageHeight - 24);
+    pdf.text(`${page} / ${pageCount}`, pageWidth - margin - 24, pageHeight - 24);
+  }
+  pdf.save(`${worksheet.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "samjho-worksheet"}.pdf`);
 }
 
 function ThinkingIndicator() {
