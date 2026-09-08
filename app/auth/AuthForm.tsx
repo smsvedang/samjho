@@ -31,8 +31,13 @@ export default function AuthForm({ mode }: { mode: AuthMode }) {
   const [brand, setBrand] = useState<BrandSettings>({ brand_name: "Samjho", logo_url: "", tagline: "AI that teaches, not just answers." });
 
   useEffect(() => {
-    if (!auth) return;
-    if (auth.currentUser) router.replace("/");
+    const currentUser = auth?.currentUser;
+    if (!currentUser) return;
+    if (!currentUser.emailVerified && currentUser.providerData.some((provider) => provider.providerId === "password")) {
+      void signOut(auth);
+      return;
+    }
+    router.replace("/");
   }, [auth, router]);
 
   useEffect(() => {
