@@ -864,10 +864,13 @@ async function downloadWorksheet(worksheet: Worksheet) {
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(size);
     pdf.setTextColor(...color);
-    const lines = pdf.splitTextToSize(text, pageWidth - margin * 2) as string[];
-    ensureSpace(lines.length * gap);
-    pdf.text(lines, margin, y);
-    y += lines.length * gap;
+    const maxTextWidth = Math.max(pageWidth - margin * 2 - 10, 120);
+    const lines = pdf.splitTextToSize(text, maxTextWidth) as string[];
+    const lineHeight = Math.max(gap, size * 1.7);
+    const blockHeight = lines.length * lineHeight + 6;
+    ensureSpace(blockHeight);
+    pdf.text(lines, margin + 2, y);
+    y += blockHeight;
   }
 
   pdf.setFillColor(35, 105, 93);
@@ -880,25 +883,29 @@ async function downloadWorksheet(worksheet: Worksheet) {
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(22);
   pdf.setTextColor(27, 48, 42);
-  const titleLines = pdf.splitTextToSize(worksheet.title, pageWidth - margin * 2) as string[];
+  const titleLines = pdf.splitTextToSize(worksheet.title, pageWidth - margin * 2 - 10) as string[];
+  const titleHeight = titleLines.length * 26 + 8;
+  ensureSpace(titleHeight);
   pdf.text(titleLines, margin, y);
-  y += titleLines.length * 26 + 8;
+  y += titleHeight;
   if (worksheet.subject) write(worksheet.subject, 10, [96, 116, 107], 14);
   write(worksheet.instructions, 11, [72, 87, 80], 16);
   y += 10;
   worksheet.questions.forEach((question, index) => {
     const optionText = question.options?.map((option, optionIndex) => `${String.fromCharCode(65 + optionIndex)}. ${option}`).join("\n") || "Answer: ______________________________________________";
     const questionText = `${index + 1}. ${question.question}\n${optionText}`;
-    const lines = pdf.splitTextToSize(questionText, pageWidth - margin * 2 - 12) as string[];
-    ensureSpace(lines.length * 16 + 14);
+    const maxQuestionWidth = Math.max(pageWidth - margin * 2 - 18, 120);
+    const lines = pdf.splitTextToSize(questionText, maxQuestionWidth) as string[];
+    const blockHeight = lines.length * 17 + 12;
+    ensureSpace(blockHeight);
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(11);
     pdf.setTextColor(27, 48, 42);
-    pdf.text(lines, margin, y);
-    y += lines.length * 16 + 14;
+    pdf.text(lines, margin + 4, y);
+    y += blockHeight;
   });
   if (worksheet.answerKey?.length) {
-    ensureSpace(48);
+    ensureSpace(52);
     y += 10;
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(14);
