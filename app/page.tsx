@@ -8,6 +8,19 @@ import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase/client";
+import { Subject, TopicSummary, UserLearningProfile } from "@/lib/learning/types";
+
+import DashboardView from "@/app/components/learning/DashboardView";
+import MyLearningView from "@/app/components/learning/MyLearningView";
+import MistakeBookView from "@/app/components/learning/MistakeBookView";
+import RevisionView from "@/app/components/learning/RevisionView";
+import TopicHubModal from "@/app/components/learning/TopicHubModal";
+import PracticeModal from "@/app/components/learning/PracticeModal";
+import DiagnosticModal from "@/app/components/learning/DiagnosticModal";
+import TestModal from "@/app/components/learning/TestModal";
+import OnboardingModal from "@/app/components/learning/OnboardingModal";
+
+type ActiveTab = "chat" | "dashboard" | "learning" | "mistakes" | "revision";
 
 type Message = {
   id: string;
@@ -30,14 +43,19 @@ type BrandSettings = { brand_name: string; logo_url: string; tagline: string };
 
 const suggestions = [
   { label: "Photosynthesis samjhao", icon: "✦" },
-  { label: "What is recursion?", icon: "{}" },
-  { label: "GDP simple language mein", icon: "↗" },
-  { label: "Why does inflation happen?", icon: "◌" },
+  { label: "What is Kirchhoff's Voltage Law?", icon: "⚡" },
+  { label: "Explain Pointers in C++ with memory diagram", icon: "{}" },
+  { label: "Integration by parts formula and practice", icon: "∫" },
 ];
 
 export default function Home() {
   const router = useRouter();
   const auth = getFirebaseAuth();
+
+  // Navigation and active tab
+  const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
+
+  // Chat State
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -47,6 +65,9 @@ export default function Home() {
   const [userId, setUserId] = useState<string | null>(null);
   const [, setConnectionStatus] = useState(auth ? "Checking Firebase session" : "Add Firebase keys to sign in");
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [idToken, setIdToken] = useState<string | null>(null);
+
+  // UI Menus
   const [profileOpen, setProfileOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
@@ -54,6 +75,33 @@ export default function Home() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [loginPromptOpen, setLoginPromptOpen] = useState(false);
   const [brand, setBrand] = useState<BrandSettings>({ brand_name: "Samjho", logo_url: "", tagline: "AI that teaches, not just answers." });
+
+  // Learning Platform State
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserLearningProfile | null>(null);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+
+  // Modals Configuration
+  const [activeTopicHub, setActiveTopicHub] = useState<TopicSummary | null>(null);
+  const [practiceConfig, setPracticeConfig] = useState<{
+    topicId: string;
+    topicName: string;
+    subjectId?: string;
+    targetConcept?: string;
+  } | null>(null);
+  const [diagnosticConfig, setDiagnosticConfig] = useState<{
+    topicId: string;
+    topicName: string;
+    keyConcepts?: string[];
+    subjectId?: string;
+  } | null>(null);
+  const [testConfig, setTestConfig] = useState<{
+    topicId: string;
+    topicName: string;
+    subjectId?: string;
+  } | null>(null);
+
   const selected = conversations.find((conversation) => conversation.id === selectedId) ?? { id: "draft", title: "New learning session", time: "Not saved", messages: [] };
   const isEmpty = selected.messages.length === 0 && !pendingPrompt;
   const filteredConversations = useMemo(
@@ -65,18 +113,54 @@ export default function Home() {
     void fetch("/api/public-settings").then((response) => response.ok ? response.json() : null).then((data) => { if (data) setBrand(data); }).catch(() => undefined);
   }, []);
 
-  useEffect(() => {
-    if (!auth) {
-      return;
+  // Fetch subjects and student learning data
+  async function refreshSubjects(token: string) {
+    setLoadingSubjects(true);
+    try {
+      const response = await fetch("/api/subjects", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSubjects(data || []);
+      }
+    } catch (err) {
+      console.error("Failed to load subjects", err);
+    } finally {
+      setLoadingSubjects(false);
     }
+  }
+
+  // Fetch user learning profile
+  async function loadProfile(token: string) {
+    try {
+      const response = await fetch("/api/profile", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUserProfile(data);
+        if (data && !data.onboarded) {
+          setOnboardingOpen(true);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load user profile", err);
+    }
+  }
+
+  useEffect(() => {
+    if (!auth) return;
     let active = true;
     let currentLoad: AbortController | null = null;
 
     function clearSessionState() {
       setUserId(null);
       setFirebaseUser(null);
+      setIdToken(null);
       setConversations([]);
       setSelectedId(null);
+      setUserProfile(null);
       setConnectionStatus("Sign in to start a lesson");
     }
 
@@ -98,19 +182,23 @@ export default function Home() {
       setUserId(user.uid);
       try {
         const token = await user.getIdToken();
+        setIdToken(token);
         if (!active || controller.signal.aborted) return;
+
+        // Load chat conversations
         const response = await fetch("/api/conversations", { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal });
         if (!active || controller.signal.aborted) return;
-        if (!response.ok) {
-          setConnectionStatus(response.status === 401 ? "Sign-in session needs refreshing" : "Lessons are temporarily unavailable");
-          return;
+        if (response.ok) {
+          const data = await response.json();
+          const loaded = (data ?? []).map((conversation: { id: string; title: string; updated_at: string }) => ({ id: conversation.id, title: conversation.title, time: new Date(conversation.updated_at).toLocaleDateString(), messages: [] }));
+          setConversations(loaded);
+          setSelectedId(loaded[0]?.id ?? null);
+          setConnectionStatus("Synced with Firebase");
         }
-        const data = await response.json();
-        if (!active || controller.signal.aborted) return;
-        const loaded = (data ?? []).map((conversation: { id: string; title: string; updated_at: string }) => ({ id: conversation.id, title: conversation.title, time: new Date(conversation.updated_at).toLocaleDateString(), messages: [] }));
-        setConversations(loaded);
-        setSelectedId(loaded[0]?.id ?? null);
-        setConnectionStatus("Synced with Firebase");
+
+        // Load subjects & profile
+        void refreshSubjects(token);
+        void loadProfile(token);
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setConnectionStatus("Lessons are temporarily unavailable");
@@ -172,7 +260,23 @@ export default function Home() {
       setSelectedId(conversationId);
       setConversations((current) => [{ id: data.id, title: data.title, time: "Just now", messages: [] }, ...current.filter((conversation) => !conversation.id.startsWith("draft-"))]);
     }
-    const tutorResponse = await fetch("/api/tutor", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ prompt, messages: selected.messages.map(({ role, content }) => ({ role, content })) }) });
+
+    // Include student learning context for adaptive responses
+    const learningContext = {
+      education_level: userProfile?.education_level || "college",
+      preferred_language: userProfile?.preferred_language || "hinglish",
+    };
+
+    const tutorResponse = await fetch("/api/tutor", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        messages: selected.messages.map(({ role, content }) => ({ role, content })),
+        learning_context: learningContext,
+      }),
+    });
+
     if (!tutorResponse.ok) {
       const error = await tutorResponse.json().catch(() => null) as { error?: string } | null;
       setConnectionStatus(error?.error || "The tutor is temporarily unavailable");
@@ -194,7 +298,7 @@ export default function Home() {
     setPendingPrompt(null);
     setInput("");
     setConnectionStatus("Synced with Firebase");
-    window.setTimeout(() => setIsThinking(false), 650);
+    window.setTimeout(() => setIsThinking(false), 450);
   }
 
   function startNewChat() {
@@ -202,6 +306,7 @@ export default function Home() {
     setConversations((current) => [{ id, title: "New learning session", time: "Just now", messages: [] }, ...current]);
     setSelectedId(id);
     setInput("");
+    setActiveTab("chat");
     setMobileSidebarOpen(false);
   }
 
@@ -227,6 +332,7 @@ export default function Home() {
     setIsSigningOut(true);
     setUserId(null);
     setFirebaseUser(null);
+    setIdToken(null);
     setConversations([]);
     setSelectedId(null);
     setInput("");
@@ -239,40 +345,398 @@ export default function Home() {
     }
   }
 
+  async function handleCompleteOnboarding(data: {
+    education_level: import("@/lib/learning/types").EducationLevel;
+    exam_target: string;
+    preferred_language: import("@/lib/learning/types").PreferredLanguage;
+  }) {
+    if (!idToken) return;
+    const response = await fetch("/api/profile", {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ...data,
+        onboarded: true,
+      }),
+    });
+    if (response.ok) {
+      const updated = await response.json();
+      setUserProfile(updated);
+      setOnboardingOpen(false);
+    }
+  }
+
+  // Helpers to find topic by id or fallback to default
+  function findTopicOrFallback(topicId?: string): TopicSummary {
+    for (const s of subjects) {
+      const found = (s.topics || []).find((t) => t.id === topicId);
+      if (found) return found;
+    }
+    return subjects[0]?.topics?.[0] || {
+      id: "kvl",
+      subject_id: "default",
+      name: "Kirchhoff's Voltage Law (KVL)",
+      slug: "kvl",
+      description: "Loop voltage analysis and sign conventions.",
+      key_concepts: ["sign_convention", "loop_identification", "mesh_equations"],
+      order_index: 1,
+    };
+  }
+
+  // Learning Action triggers
+  function launchPracticeForTopic(topicId: string, topicName: string, concept?: string) {
+    if (!idToken) {
+      setLoginPromptOpen(true);
+      return;
+    }
+    setPracticeConfig({
+      topicId,
+      topicName,
+      targetConcept: concept,
+    });
+  }
+
+  function launchDiagnosticForTopic(topic: TopicSummary) {
+    if (!idToken) {
+      setLoginPromptOpen(true);
+      return;
+    }
+    setDiagnosticConfig({
+      topicId: topic.id,
+      topicName: topic.name,
+      keyConcepts: topic.key_concepts,
+      subjectId: topic.subject_id,
+    });
+  }
+
+  function launchTestForTopic(topic: TopicSummary) {
+    if (!idToken) {
+      setLoginPromptOpen(true);
+      return;
+    }
+    setTestConfig({
+      topicId: topic.id,
+      topicName: topic.name,
+      subjectId: topic.subject_id,
+    });
+  }
+
   return (
     <main className="app-shell">
+      {/* Top Header */}
       <header className="topbar">
-        <button className="mobile-menu" aria-label="Open conversation history" aria-expanded={mobileSidebarOpen} onClick={() => setMobileSidebarOpen((open) => !open)}>☰</button>
+        <button className="mobile-menu" aria-label="Open navigation" aria-expanded={mobileSidebarOpen} onClick={() => setMobileSidebarOpen((open) => !open)}>☰</button>
         <div className="wordmark"><BrandMark logoUrl={brand.logo_url} /><span>{brand.brand_name.toLowerCase()}</span></div>
-        <div className="topbar-right">{firebaseUser ? <div className="profile-menu-wrap"><button className="profile-button" aria-label="Open profile" aria-expanded={profileOpen} onClick={() => { setProfileOpen((open) => !open); setHistoryMenuOpen(false); setConversationMenuOpen(false); }}>{firebaseUser.photoURL ? <span className="profile-photo" role="img" aria-label="Profile photo" style={{ backgroundImage: `url(${firebaseUser.photoURL})` }} /> : firebaseUser.displayName?.slice(0, 1).toUpperCase() ?? "A"}</button>{profileOpen && <div className="profile-menu"><strong>{firebaseUser.displayName || "Your profile"}</strong><span>{firebaseUser.email}</span><button type="button" disabled={isSigningOut} onClick={() => void handleSignOut()}>{isSigningOut ? "Signing out..." : "Sign out"}</button></div>}</div> : <div className="auth-actions"><Link href="/login">Log in</Link><Link href="/signup" className="auth-action-primary">Sign up</Link></div>}</div>
+
+        {/* Top Center Navigation Tabs */}
+        <nav className="nav-tabs" aria-label="Main Navigation">
+          <button
+            type="button"
+            className={`nav-tab ${activeTab === "chat" ? "active" : ""}`}
+            onClick={() => setActiveTab("chat")}
+          >
+            <span className="nav-tab-icon">✦</span> AI Tutor
+          </button>
+          <button
+            type="button"
+            className={`nav-tab ${activeTab === "dashboard" ? "active" : ""}`}
+            onClick={() => setActiveTab("dashboard")}
+          >
+            <span className="nav-tab-icon">📊</span> Dashboard
+          </button>
+          <button
+            type="button"
+            className={`nav-tab ${activeTab === "learning" ? "active" : ""}`}
+            onClick={() => setActiveTab("learning")}
+          >
+            <span className="nav-tab-icon">📚</span> My Learning
+          </button>
+          <button
+            type="button"
+            className={`nav-tab ${activeTab === "mistakes" ? "active" : ""}`}
+            onClick={() => setActiveTab("mistakes")}
+          >
+            <span className="nav-tab-icon">⚠️</span> Mistakes
+          </button>
+          <button
+            type="button"
+            className={`nav-tab ${activeTab === "revision" ? "active" : ""}`}
+            onClick={() => setActiveTab("revision")}
+          >
+            <span className="nav-tab-icon">⏱</span> Revision
+          </button>
+        </nav>
+
+        {/* Top Right Profile / Auth */}
+        <div className="topbar-right">
+          {firebaseUser ? (
+            <div className="profile-menu-wrap">
+              <button className="profile-button" aria-label="Open profile" aria-expanded={profileOpen} onClick={() => { setProfileOpen((open) => !open); setHistoryMenuOpen(false); setConversationMenuOpen(false); }}>
+                {firebaseUser.photoURL ? <span className="profile-photo" role="img" aria-label="Profile photo" style={{ backgroundImage: `url(${firebaseUser.photoURL})` }} /> : firebaseUser.displayName?.slice(0, 1).toUpperCase() ?? "A"}
+              </button>
+              {profileOpen && (
+                <div className="profile-menu">
+                  <strong>{firebaseUser.displayName || "Your profile"}</strong>
+                  <span>{firebaseUser.email}</span>
+                  <span className="label-note">Goal: {userProfile?.exam_target || "General"}</span>
+                  <button type="button" onClick={() => { setOnboardingOpen(true); setProfileOpen(false); }}>Edit Learning Preferences</button>
+                  <button type="button" disabled={isSigningOut} onClick={() => void handleSignOut()}>{isSigningOut ? "Signing out..." : "Sign out"}</button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="auth-actions">
+              <Link href="/login">Log in</Link>
+              <Link href="/signup" className="auth-action-primary">Sign up</Link>
+            </div>
+          )}
+        </div>
       </header>
+
+      {/* Main Workspace */}
       <div className="workspace">
+        {/* Sidebar (Always accessible for AI Chat history & quick tools) */}
         <aside className={`sidebar ${mobileSidebarOpen ? "mobile-open" : ""}`}>
           <button className="new-chat" onClick={startNewChat}><span>+</span> New chat</button>
           <label className="search-box"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search lessons" aria-label="Search lessons" /><kbd>⌘ K</kbd></label>
           <div className="history-heading"><span>Your learning</span><div className="menu-wrap"><button aria-label="More history options" aria-expanded={historyMenuOpen} onClick={() => { setHistoryMenuOpen((open) => !open); setProfileOpen(false); setConversationMenuOpen(false); }}>•••</button>{historyMenuOpen && <div className="small-menu"><button onClick={() => { setConversations([]); setSelectedId(null); setHistoryMenuOpen(false); }}>Clear local history</button><button onClick={() => { startNewChat(); setHistoryMenuOpen(false); }}>New learning session</button></div>}</div></div>
           <div className="conversation-list">
             <p className="group-label">Today</p>
-            {filteredConversations.slice(0, 2).map((conversation) => <ConversationItem key={conversation.id} conversation={conversation} active={conversation.id === selectedId} onClick={() => { setSelectedId(conversation.id); setMobileSidebarOpen(false); }} onDelete={() => void deleteConversation(conversation.id)} />)}
+            {filteredConversations.slice(0, 2).map((conversation) => (
+              <ConversationItem key={conversation.id} conversation={conversation} active={conversation.id === selectedId && activeTab === "chat"} onClick={() => { setSelectedId(conversation.id); setActiveTab("chat"); setMobileSidebarOpen(false); }} onDelete={() => void deleteConversation(conversation.id)} />
+            ))}
             <p className="group-label spaced">Earlier</p>
-            {filteredConversations.slice(2).map((conversation) => <ConversationItem key={conversation.id} conversation={conversation} active={conversation.id === selectedId} onClick={() => { setSelectedId(conversation.id); setMobileSidebarOpen(false); }} onDelete={() => void deleteConversation(conversation.id)} />)}
+            {filteredConversations.slice(2).map((conversation) => (
+              <ConversationItem key={conversation.id} conversation={conversation} active={conversation.id === selectedId && activeTab === "chat"} onClick={() => { setSelectedId(conversation.id); setActiveTab("chat"); setMobileSidebarOpen(false); }} onDelete={() => void deleteConversation(conversation.id)} />
+            ))}
           </div>
-          <div className="sidebar-footer"><button>↗ <span>Share feedback</span></button></div>
+          <div className="sidebar-footer">
+            <button type="button" onClick={() => setOnboardingOpen(true)}>⚙ <span>Learning Settings</span></button>
+          </div>
         </aside>
 
-        <section className="chat-area">
-          <div className="chat-heading"><div><span className="eyebrow">LEARNING SESSION</span><h1>{selected.title}</h1></div><div className="menu-wrap"><button className="more-button" aria-label="Conversation options" aria-expanded={conversationMenuOpen} onClick={() => { setConversationMenuOpen((open) => !open); setProfileOpen(false); setHistoryMenuOpen(false); }}>•••</button>{conversationMenuOpen && <div className="small-menu conversation-menu"><button onClick={() => { startNewChat(); setConversationMenuOpen(false); }}>New learning session</button><button onClick={() => { setInput(""); setConversationMenuOpen(false); }}>Clear composer</button></div>}</div></div>
-          <div className={`message-scroll ${isEmpty ? "empty-scroll" : ""}`}>
-            {isEmpty ? <EmptyState onSuggestion={selectSuggestion} /> : <div className="messages">{selected.messages.map((message) => <MessageBubble key={message.id} message={message} />)}{pendingPrompt && <MessageBubble message={{ id: "pending-user", role: "user", content: pendingPrompt }} />}{isThinking && <ThinkingIndicator />}</div>}
+        {/* Tab 1: AI Chat (Preserved & Enhanced) */}
+        {activeTab === "chat" && (
+          <section className="chat-area">
+            <div className="chat-heading">
+              <div>
+                <span className="eyebrow">ADAPTIVE AI TUTOR</span>
+                <h1>{selected.title}</h1>
+              </div>
+              <div className="menu-wrap">
+                <button className="more-button" aria-label="Conversation options" aria-expanded={conversationMenuOpen} onClick={() => { setConversationMenuOpen((open) => !open); setProfileOpen(false); setHistoryMenuOpen(false); }}>•••</button>
+                {conversationMenuOpen && (
+                  <div className="small-menu conversation-menu">
+                    <button onClick={() => { startNewChat(); setConversationMenuOpen(false); }}>New learning session</button>
+                    <button onClick={() => { setInput(""); setConversationMenuOpen(false); }}>Clear composer</button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className={`message-scroll ${isEmpty ? "empty-scroll" : ""}`}>
+              {isEmpty ? (
+                <EmptyState onSuggestion={selectSuggestion} />
+              ) : (
+                <div className="messages">
+                  {selected.messages.map((message) => (
+                    <MessageBubble
+                      key={message.id}
+                      message={message}
+                      onActionClick={(action) => {
+                        const top = findTopicOrFallback();
+                        if (action === "practice") launchPracticeForTopic(top.id, top.name);
+                        else if (action === "diagnostic") launchDiagnosticForTopic(top);
+                        else if (action === "test") launchTestForTopic(top);
+                        else if (action === "explain_mistake") setInput(`Can you explain what mistake I might be making in this concept and how to avoid it?`);
+                      }}
+                    />
+                  ))}
+                  {pendingPrompt && <MessageBubble message={{ id: "pending-user", role: "user", content: pendingPrompt }} />}
+                  {isThinking && <ThinkingIndicator />}
+                </div>
+              )}
+            </div>
+
+            <div className="composer-wrap">
+              {!isEmpty && (
+                <div className="quick-actions">
+                  <button onClick={() => setQuickAction("Explain from basic principles")}>Explain simply</button>
+                  <button onClick={() => setQuickAction("Give a real-life analogy")}>Real-life analogy</button>
+                  <button onClick={() => {
+                    const top = findTopicOrFallback();
+                    launchPracticeForTopic(top.id, top.name);
+                  }}>⚡ Practice Questions</button>
+                  <button onClick={() => {
+                    const top = findTopicOrFallback();
+                    launchTestForTopic(top);
+                  }}>⏱ Test Me</button>
+                </div>
+              )}
+              <form className="composer" onSubmit={submitMessage}>
+                <textarea
+                  value={input}
+                  onChange={(event) => setInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
+                  placeholder="What do you want to understand? Ask a concept or solve a problem..."
+                  aria-label="What do you want to understand?"
+                  rows={1}
+                />
+                <div className="composer-bottom">
+                  <span>Samjho adapts to how you learn <span className="sparkle">✦</span></span>
+                  <button className="send-button" type="submit" aria-label="Send message">↑</button>
+                </div>
+              </form>
+              <p className="composer-note">Samjho can make mistakes. Check important information.</p>
+            </div>
+          </section>
+        )}
+
+        {/* Tab 2: Dashboard */}
+        {activeTab === "dashboard" && (
+          <div className="learning-container">
+            <DashboardView
+              subjects={subjects}
+              loading={loadingSubjects}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+              onSelectTopic={(topic) => setActiveTopicHub(topic)}
+              onStartPractice={(topicId, topicName, concept) => launchPracticeForTopic(topicId, topicName, concept)}
+              onStartRevision={(topicId, topicName) => launchPracticeForTopic(topicId, topicName)}
+            />
           </div>
-          <div className="composer-wrap">
-            {!isEmpty && <div className="quick-actions"><button onClick={() => setQuickAction("Make it simpler")}>Make it simpler</button><button onClick={() => setQuickAction("Give another real-life example")}>Another example</button><button onClick={() => setQuickAction("Test me")}>Test me</button></div>}
-            <form className="composer" onSubmit={submitMessage}><textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder="What do you want to understand?" aria-label="What do you want to understand?" rows={1} /><div className="composer-bottom"><span>Samjho adapts to how you learn <span className="sparkle">✦</span></span><button className="send-button" type="submit" aria-label="Send message">↑</button></div></form>
-            <p className="composer-note">Samjho can make mistakes. Check important information.</p>
+        )}
+
+        {/* Tab 3: My Learning */}
+        {activeTab === "learning" && (
+          <div className="learning-container">
+            <MyLearningView
+              subjects={subjects}
+              loading={loadingSubjects}
+              onSelectTopic={(topic) => setActiveTopicHub(topic)}
+            />
           </div>
-        </section>
+        )}
+
+        {/* Tab 4: Mistake Book */}
+        {activeTab === "mistakes" && (
+          <div className="learning-container">
+            {idToken ? (
+              <MistakeBookView
+                token={idToken}
+                onFixMistake={(topicId, topicName, concept) => launchPracticeForTopic(topicId, topicName, concept)}
+              />
+            ) : (
+              <div className="empty-state-card">
+                <h3>Please sign in to view your Mistake Book</h3>
+                <Link href="/login" className="primary-button">Sign in</Link>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 5: Spaced Revision */}
+        {activeTab === "revision" && (
+          <div className="learning-container">
+            {idToken ? (
+              <RevisionView
+                token={idToken}
+                onStartRevisionSession={(topicId, topicName) => launchPracticeForTopic(topicId, topicName)}
+              />
+            ) : (
+              <div className="empty-state-card">
+                <h3>Please sign in to view your Spaced Revision Queue</h3>
+                <Link href="/login" className="primary-button">Sign in</Link>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-      {loginPromptOpen && <div className="login-prompt-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setLoginPromptOpen(false); }}><section className="login-prompt" role="dialog" aria-modal="true" aria-labelledby="login-prompt-title"><button className="login-prompt-close" type="button" aria-label="Close sign in message" onClick={() => setLoginPromptOpen(false)}>×</button><span className="eyebrow">YOUR LEARNING SPACE</span><h2 id="login-prompt-title">Please log in to start chatting</h2><p>Sign in or create an account to ask questions, save lessons, and continue learning later.</p><div className="login-prompt-actions"><Link href="/login" className="auth-action-primary">Log in</Link><Link href="/signup">Sign up</Link></div></section></div>}
+
+      {/* Learning Modals */}
+      {activeTopicHub && (
+        <TopicHubModal
+          topic={activeTopicHub}
+          token={idToken || undefined}
+          onClose={() => setActiveTopicHub(null)}
+          onStartPractice={(concept) => launchPracticeForTopic(activeTopicHub.id, activeTopicHub.name, concept)}
+          onStartDiagnostic={() => launchDiagnosticForTopic(activeTopicHub)}
+          onStartTest={() => launchTestForTopic(activeTopicHub)}
+          onOpenMistakes={() => setActiveTab("mistakes")}
+        />
+      )}
+
+      {practiceConfig && idToken && (
+        <PracticeModal
+          topicId={practiceConfig.topicId}
+          topicName={practiceConfig.topicName}
+          subjectId={practiceConfig.subjectId}
+          targetConcept={practiceConfig.targetConcept}
+          token={idToken}
+          onClose={() => setPracticeConfig(null)}
+          onMasteryUpdated={() => {
+            if (idToken) void refreshSubjects(idToken);
+          }}
+        />
+      )}
+
+      {diagnosticConfig && idToken && (
+        <DiagnosticModal
+          topicId={diagnosticConfig.topicId}
+          topicName={diagnosticConfig.topicName}
+          keyConcepts={diagnosticConfig.keyConcepts}
+          subjectId={diagnosticConfig.subjectId}
+          token={idToken}
+          onClose={() => setDiagnosticConfig(null)}
+          onStartRemediation={(concept) => {
+            launchPracticeForTopic(diagnosticConfig.topicId, diagnosticConfig.topicName, concept);
+          }}
+        />
+      )}
+
+      {testConfig && idToken && (
+        <TestModal
+          topicId={testConfig.topicId}
+          topicName={testConfig.topicName}
+          subjectId={testConfig.subjectId}
+          token={idToken}
+          onClose={() => setTestConfig(null)}
+          onStartRemediation={(weakness) => {
+            launchPracticeForTopic(testConfig.topicId, testConfig.topicName, weakness);
+          }}
+        />
+      )}
+
+      {onboardingOpen && (
+        <OnboardingModal
+          initialLanguage={userProfile?.preferred_language || "hinglish"}
+          onClose={() => setOnboardingOpen(false)}
+          onComplete={handleCompleteOnboarding}
+        />
+      )}
+
+      {/* Login Prompt Dialog */}
+      {loginPromptOpen && (
+        <div className="login-prompt-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setLoginPromptOpen(false); }}>
+          <section className="login-prompt" role="dialog" aria-modal="true" aria-labelledby="login-prompt-title">
+            <button className="login-prompt-close" type="button" aria-label="Close sign in message" onClick={() => setLoginPromptOpen(false)}>×</button>
+            <span className="eyebrow">YOUR LEARNING SPACE</span>
+            <h2 id="login-prompt-title">Please log in to start learning</h2>
+            <p>Sign in or create an account to solve adaptive problems, track weaknesses, and save your progress.</p>
+            <div className="login-prompt-actions">
+              <Link href="/login" className="auth-action-primary">Log in</Link>
+              <Link href="/signup">Sign up</Link>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
@@ -286,12 +750,83 @@ function BrandMark({ logoUrl }: { logoUrl: string }) {
 }
 
 function EmptyState({ onSuggestion }: { onSuggestion: (prompt: string) => void }) {
-  return <div className="empty-state"><div className="empty-icon"><span>✦</span></div><span className="eyebrow">A LITTLE LESS STUCK</span><h2>What do you want to<br /><em>understand?</em></h2><p>Ask anything. We’ll find the explanation<br />that makes it click for you.</p><div className="suggestions">{suggestions.map((suggestion) => <button key={suggestion.label} onClick={() => onSuggestion(suggestion.label)}><span>{suggestion.icon}</span>{suggestion.label}<b>↗</b></button>)}</div></div>;
+  return (
+    <div className="empty-state">
+      <div className="empty-icon"><span>✦</span></div>
+      <span className="eyebrow">A LITTLE LESS STUCK</span>
+      <h2>What do you want to<br /><em>understand?</em></h2>
+      <p>Ask anything. We’ll find the explanation<br />that makes it click for you.</p>
+      <div className="suggestions">
+        {suggestions.map((suggestion) => (
+          <button key={suggestion.label} onClick={() => onSuggestion(suggestion.label)}>
+            <span>{suggestion.icon}</span>{suggestion.label}<b>↗</b>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({
+  message,
+  onActionClick,
+}: {
+  message: Message;
+  onActionClick?: (action: "practice" | "diagnostic" | "test" | "explain_mistake") => void;
+}) {
   const worksheet = message.role === "assistant" ? extractWorksheet(message.content) : null;
-  return <article className={`message ${message.role}`}><div className="message-avatar">{message.role === "assistant" ? "s" : "A"}</div><div className="message-content">{message.role === "assistant" && <span className="assistant-label">SAMJHO <span>✦</span></span>}{message.role === "assistant" ? <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizeMathDelimiters(message.content)}</ReactMarkdown> : message.content.split("\n").map((line, index) => line ? <p key={index}>{line}</p> : <br key={index} />)}{worksheet && <button className="worksheet-download" type="button" onClick={() => void downloadWorksheet(worksheet)}>Download worksheet PDF <span>↓</span></button>}</div></article>;
+  return (
+    <article className={`message ${message.role}`}>
+      <div className="message-avatar">{message.role === "assistant" ? "s" : "A"}</div>
+      <div className="message-content">
+        {message.role === "assistant" && <span className="assistant-label">SAMJHO <span>✦</span></span>}
+        {message.role === "assistant" ? (
+          <>
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {normalizeMathDelimiters(message.content)}
+            </ReactMarkdown>
+
+            {/* Learning Action Chips on Assistant Responses */}
+            {!worksheet && onActionClick && (
+              <div className="chat-learning-actions">
+                <button
+                  type="button"
+                  className="learning-chip highlight"
+                  onClick={() => onActionClick("practice")}
+                >
+                  ⚡ Practice This
+                </button>
+                <button
+                  type="button"
+                  className="learning-chip"
+                  onClick={() => onActionClick("diagnostic")}
+                >
+                  🩺 Diagnostic Check
+                </button>
+                <button
+                  type="button"
+                  className="learning-chip"
+                  onClick={() => onActionClick("test")}
+                >
+                  ⏱ Test Me
+                </button>
+                <button
+                  type="button"
+                  className="learning-chip"
+                  onClick={() => onActionClick("explain_mistake")}
+                >
+                  💡 Explain Mistakes
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          message.content.split("\n").map((line, index) => line ? <p key={index}>{line}</p> : <br key={index} />)
+        )}
+        {worksheet && <button className="worksheet-download" type="button" onClick={() => void downloadWorksheet(worksheet)}>Download worksheet PDF <span>↓</span></button>}
+      </div>
+    </article>
+  );
 }
 
 function extractWorksheet(content: string): Worksheet | null {
