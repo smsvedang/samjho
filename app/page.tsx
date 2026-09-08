@@ -775,6 +775,7 @@ function MessageBubble({
   onActionClick?: (action: "practice" | "diagnostic" | "test" | "explain_mistake") => void;
 }) {
   const worksheet = message.role === "assistant" ? extractWorksheet(message.content) : null;
+  const displayContent = worksheet ? removeWorksheetMarker(message.content) : message.content;
   return (
     <article className={`message ${message.role}`}>
       <div className="message-avatar">{message.role === "assistant" ? "s" : "A"}</div>
@@ -783,7 +784,7 @@ function MessageBubble({
         {message.role === "assistant" ? (
           <>
             <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-              {normalizeMathDelimiters(message.content)}
+              {normalizeMathDelimiters(displayContent)}
             </ReactMarkdown>
 
             {/* Learning Action Chips on Assistant Responses */}
@@ -838,6 +839,10 @@ function extractWorksheet(content: string): Worksheet | null {
   } catch {
     return null;
   }
+}
+
+function removeWorksheetMarker(content: string) {
+  return content.replace(/<!-- SAMJHO_WORKSHEET\s*[\s\S]*?\s*-->/, "").trim();
 }
 
 async function downloadWorksheet(worksheet: Worksheet) {

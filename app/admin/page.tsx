@@ -1,122 +1,61 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 
-const strategyOptions = [
-  "simple_definition",
-  "real_life_analogy",
-  "story",
-  "step_by_step",
-  "mental_visualization",
-  "comparison",
-  "cause_effect",
-  "practical_example",
-  "socratic",
-  "teach_back",
-  "exam_oriented",
-];
-
-type Settings = {
-  brand_name: string;
-  logo_url: string;
-  tagline: string;
-  default_language: string;
-  default_learning_goal: string;
-  tutor_instructions: string;
-  enabled_strategies: string[];
-  max_input_length: number;
-  max_context_messages: number;
-};
-
-const defaults: Settings = {
-  brand_name: "Samjho",
-  logo_url: "",
-  tagline: "AI that teaches, not just answers.",
-  default_language: "hinglish",
-  default_learning_goal: "understand_concept",
-  tutor_instructions: "Teach for understanding. Adapt your explanation when the learner struggles.",
-  enabled_strategies: ["simple_definition", "real_life_analogy", "step_by_step", "mental_visualization", "socratic"],
-  max_input_length: 10000,
-  max_context_messages: 20,
-};
+const strategies = ["simple_definition", "real_life_analogy", "story", "step_by_step", "mental_visualization", "comparison", "cause_effect", "practical_example", "socratic", "teach_back", "exam_oriented"];
+const tabs = ["Overview", "Learners", "Curriculum", "Question bank", "Settings"] as const;
+type Tab = typeof tabs[number];
+type Settings = { brand_name: string; logo_url: string; tagline: string; default_language: string; default_learning_goal: string; tutor_instructions: string; enabled_strategies: string[]; max_input_length: number; max_context_messages: number };
+type AdminData = { metrics: Record<string, number>; recentUsers: Array<Record<string, string>>; recentQuestions: Array<Record<string, unknown>>; recentSessions: Array<Record<string, unknown>> };
+const defaults: Settings = { brand_name: "Samjho", logo_url: "", tagline: "AI that teaches, not just answers.", default_language: "hinglish", default_learning_goal: "understand_concept", tutor_instructions: "Teach for understanding. Adapt your explanation when the learner struggles.", enabled_strategies: ["simple_definition", "real_life_analogy", "step_by_step", "mental_visualization", "socratic"], max_input_length: 10000, max_context_messages: 20 };
+const titleCase = (value: string) => value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+const formatDate = (value: unknown) => value ? new Date(String(value)).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "—";
 
 export default function AdminPage() {
   const auth = getFirebaseAuth();
   const [settings, setSettings] = useState<Settings>(defaults);
-  const [status, setStatus] = useState(auth ? "Checking admin access..." : "Add Firebase keys to manage settings.");
+  const [data, setData] = useState<AdminData | null>(null);
+  const [tab, setTab] = useState<Tab>("Overview");
+  const [status, setStatus] = useState(auth ? "Checking admin access..." : "Add Firebase keys to manage the console.");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!auth) {
-      return;
-    }
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-        if (!user) {
-          setStatus("Sign in with an admin Firebase account to continue.");
-          return;
-        }
-        const tokenResult = await user.getIdTokenResult(true);
-        if (tokenResult.claims.admin !== true && tokenResult.claims.role !== "admin") {
-          setStatus("This Firebase account does not have admin access.");
-          return;
-        }
-        const token = await user.getIdToken(true);
-        const response = await fetch("/api/settings", { headers: { Authorization: `Bearer ${token}` } });
-        if (!response.ok) {
-          setStatus("Could not load settings from Supabase.");
-          return;
-        }
-        const data = await response.json();
-        if (data) setSettings({ ...defaults, ...data, logo_url: data.logo_url ?? "", enabled_strategies: Array.isArray(data.enabled_strategies) ? data.enabled_strategies : defaults.enabled_strategies });
-        setIsAdmin(true);
-        setStatus("Admin access verified");
-      });
-    return unsubscribe;
+    if (!auth) return;
+    return onAuthStateChanged(auth, async (user) => {
+      if (!user) { setStatus("Sign in with an admin Firebase account to continue."); return; }
+      const claims = await user.getIdTokenResult(true);
+      if (claims.claims.admin !== true && claims.claims.role !== "admin") { setStatus("This Firebase account does not have admin access."); return; }
+      setIsAdmin(true); setLoading(true);
+      const token = await user.getIdToken(true);
+      const [settingsResponse, overviewResponse] = await Promise.all([fetch("/api/settings", { headers: { Authorization: `Bearer ${token}` } }), fetch("/api/admin/overview", { headers: { Authorization: `Bearer ${token}` } })]);
+      if (settingsResponse.ok) { const value = await settingsResponse.json(); setSettings({ ...defaults, ...value, logo_url: value.logo_url ?? "", enabled_strategies: Array.isArray(value.enabled_strategies) ? value.enabled_strategies : defaults.enabled_strategies }); }
+      if (overviewResponse.ok) setData(await overviewResponse.json()); else setStatus("Could not load platform data.");
+      setLoading(false); setStatus("Admin access verified");
+    });
   }, [auth]);
 
-  function updateSetting<Key extends keyof Settings>(key: Key, value: Settings[Key]) {
-    setSettings((current) => ({ ...current, [key]: value }));
-  }
+  async function refresh() { if (!auth?.currentUser) return; setLoading(true); const response = await fetch("/api/admin/overview", { headers: { Authorization: `Bearer ${await auth.currentUser.getIdToken()}` } }); if (response.ok) setData(await response.json()); else setStatus("Could not refresh platform data."); setLoading(false); }
+  async function saveSettings(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); if (!auth?.currentUser) return; setSaving(true); const response = await fetch("/api/settings", { method: "PUT", headers: { Authorization: `Bearer ${await auth.currentUser.getIdToken()}`, "Content-Type": "application/json" }, body: JSON.stringify({ ...settings, logo_url: settings.logo_url || null }) }); setStatus(response.ok ? "Settings saved" : "Could not save settings."); setSaving(false); }
+  function updateSetting<Key extends keyof Settings>(key: Key, value: Settings[Key]) { setSettings((current) => ({ ...current, [key]: value })); }
+  function toggleStrategy(strategy: string) { updateSetting("enabled_strategies", settings.enabled_strategies.includes(strategy) ? settings.enabled_strategies.filter((item) => item !== strategy) : [...settings.enabled_strategies, strategy]); }
 
-  function toggleStrategy(strategy: string) {
-    updateSetting("enabled_strategies", settings.enabled_strategies.includes(strategy)
-      ? settings.enabled_strategies.filter((item) => item !== strategy)
-      : [...settings.enabled_strategies, strategy]);
-  }
-
-  async function saveSettings(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!auth || !isAdmin || !auth.currentUser) return;
-    setSaving(true);
-    const token = await auth.currentUser.getIdToken();
-    const response = await fetch("/api/settings", { method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ ...settings, logo_url: settings.logo_url || null }) });
-    setStatus(response.ok ? "Settings saved" : "Could not save settings. Check the Firebase admin claim.");
-    setSaving(false);
-  }
-
-  function clearLocalData() {
-    localStorage.clear();
-    sessionStorage.clear();
-    setStatus("Local browser data cleared");
-  }
-
-  return (
-    <main className="admin-shell">
-      <header className="admin-topbar"><Link href="/" className="admin-back">← Back to learning</Link><div className="wordmark"><span className="wordmark-mark">s</span><span>{settings.brand_name || "samjho"}</span></div><span className="admin-status">{status}</span></header>
-      {!isAdmin ? <section className="admin-gate"><div className="admin-gate-icon">⌁</div><span className="eyebrow">ADMIN CONSOLE</span><h1>Settings are protected.</h1><p>{status}</p><Link href="/" className="admin-primary">Return to Samjho</Link></section> : <form className="admin-content" onSubmit={saveSettings}>
-        <div className="admin-intro"><div><span className="eyebrow">ADMIN CONSOLE</span><h1>Make Samjho yours.</h1><p>Manage the tutor’s voice, boundaries, and visual identity from one place.</p></div><button className="admin-primary" type="submit" disabled={saving}>{saving ? "Saving..." : "Save changes"}</button></div>
-        <div className="admin-grid">
-          <section className="settings-section"><div className="section-heading"><span className="section-number">01</span><div><h2>Brand identity</h2><p>Shape how Samjho appears to learners.</p></div></div><div className="settings-card"><label>Brand name<input value={settings.brand_name} onChange={(event) => updateSetting("brand_name", event.target.value)} /></label><label>Tagline<input value={settings.tagline} onChange={(event) => updateSetting("tagline", event.target.value)} /></label><label>Logo URL <span className="label-note">PNG, JPG, or SVG URL</span><input value={settings.logo_url} onChange={(event) => updateSetting("logo_url", event.target.value)} placeholder="https://..." /></label><div className="logo-preview"><div className="preview-mark" style={settings.logo_url ? { backgroundImage: `url(${settings.logo_url})`, backgroundSize: "cover", backgroundPosition: "center", color: "transparent" } : undefined}>s</div><div><span>Live preview</span><strong>{settings.brand_name || "Your brand"}</strong></div></div></div></section>
-          <section className="settings-section"><div className="section-heading"><span className="section-number">02</span><div><h2>Tutor behavior</h2><p>Set the defaults behind every explanation.</p></div></div><div className="settings-card"><label>Default language<select value={settings.default_language} onChange={(event) => updateSetting("default_language", event.target.value)}><option value="hinglish">Hinglish</option><option value="english">English</option><option value="hindi">Hindi</option></select></label><label>Default learning goal<select value={settings.default_learning_goal} onChange={(event) => updateSetting("default_learning_goal", event.target.value)}><option value="understand_concept">Understand concept</option><option value="exam_preparation">Exam preparation</option><option value="practical_application">Practical application</option><option value="interview_preparation">Interview preparation</option><option value="just_curious">Just curious</option></select></label><label>Core tutor instructions<textarea value={settings.tutor_instructions} onChange={(event) => updateSetting("tutor_instructions", event.target.value)} rows={4} /></label></div></section>
-          <section className="settings-section full-width"><div className="section-heading"><span className="section-number">03</span><div><h2>Teaching strategies</h2><p>Choose the tools the tutor can use to make ideas click.</p></div></div><div className="strategy-grid">{strategyOptions.map((strategy) => <label className={`strategy-option ${settings.enabled_strategies.includes(strategy) ? "selected" : ""}`} key={strategy}><input type="checkbox" checked={settings.enabled_strategies.includes(strategy)} onChange={() => toggleStrategy(strategy)} /><span>{strategy.replaceAll("_", " ")}</span><b>{settings.enabled_strategies.includes(strategy) ? "✓" : ""}</b></label>)}</div></section>
-          <section className="settings-section"><div className="section-heading"><span className="section-number">04</span><div><h2>Safety and limits</h2><p>Keep usage predictable and affordable.</p></div></div><div className="settings-card split-fields"><label>Max input characters<input type="number" min={1000} max={50000} value={settings.max_input_length} onChange={(event) => updateSetting("max_input_length", Number(event.target.value))} /></label><label>Context messages<input type="number" min={4} max={50} value={settings.max_context_messages} onChange={(event) => updateSetting("max_context_messages", Number(event.target.value))} /></label></div></section>
-          <section className="settings-section danger-section"><div className="section-heading"><span className="section-number">05</span><div><h2>Data controls</h2><p>Remove data stored by this browser.</p></div></div><div className="settings-card danger-card"><div><strong>Clear local browser data</strong><p>Removes cached drafts and local preferences from this device. Synced Supabase conversations are not affected.</p></div><button type="button" className="danger-button" onClick={clearLocalData}>Clear local data</button></div></section>
-        </div>
-      </form>}
-    </main>
-  );
+  if (!isAdmin) return <main className="admin-shell"><AdminTopbar brand={settings.brand_name} status={status} /><section className="admin-gate"><div className="admin-gate-icon">⌁</div><span className="eyebrow">ADMIN CONSOLE</span><h1>Settings are protected.</h1><p>{status}</p><Link href="/" className="admin-primary">Return to Samjho</Link></section></main>;
+  return <main className="admin-shell"><AdminTopbar brand={settings.brand_name} status={status} /><div className="admin-layout"><aside className="admin-sidebar"><div className="admin-sidebar-label">Workspace</div>{tabs.map((item, index) => <button key={item} className={`admin-nav-item ${tab === item ? "active" : ""}`} onClick={() => setTab(item)}><span className="admin-nav-index">0{index + 1}</span>{item}<span className="admin-nav-arrow">›</span></button>)}<div className="admin-sidebar-bottom"><Link href="/">↩ Back to learning</Link><button onClick={() => void refresh()}>↻ Refresh data</button></div></aside><section className="admin-main"><div className="admin-page-heading"><div><span className="eyebrow">SAMJHO CONTROL CENTER</span><h1>{tab}</h1><p>{tab === "Overview" ? "A live view of learning health, content, and platform activity." : `Manage ${tab.toLowerCase()} across the learning platform.`}</p></div><div className={`live-indicator ${loading ? "loading" : ""}`}><i />{loading ? "Syncing" : "Live data"}</div></div>{tab === "Overview" && <Overview data={data} onNavigate={setTab} />}{tab === "Learners" && <Learners data={data} />}{tab === "Curriculum" && <Curriculum data={data} />}{tab === "Question bank" && <QuestionBank data={data} />}{tab === "Settings" && <SettingsPanel settings={settings} updateSetting={updateSetting} toggleStrategy={toggleStrategy} saveSettings={saveSettings} saving={saving} />}</section></div></main>;
 }
+
+function AdminTopbar({ brand, status }: { brand: string; status: string }) { return <header className="admin-topbar"><Link href="/" className="admin-back">← Samjho learning</Link><div className="wordmark"><span className="wordmark-mark">s</span><span>{brand || "samjho"}</span></div><span className="admin-status">{status}</span></header>; }
+function EmptyState({ text }: { text: string }) { return <div className="admin-empty">{text}</div>; }
+function PanelHeading({ title, action, onClick }: { title: string; action: string; onClick: () => void }) { return <div className="panel-heading"><div><h2>{title}</h2><p>Latest records from Supabase</p></div><button onClick={onClick}>{action} ↗</button></div>; }
+
+function Overview({ data, onNavigate }: { data: AdminData | null; onNavigate: (tab: Tab) => void }) { const metrics = data?.metrics || {}; const cards = [["users", "Learners", "Total learner accounts", "01"], ["sessions", "Learning sessions", "Study moments recorded", "02"], ["attempts", "Practice attempts", "Answers evaluated", "03"], ["questions", "Question bank", "Ready-to-use questions", "04"]]; return <div className="admin-view"><div className="metric-grid">{cards.map(([key, label, sub, number]) => <button className="admin-metric" key={key} onClick={() => onNavigate(key === "users" ? "Learners" : key === "questions" ? "Question bank" : "Overview")}><span className="metric-index">{number}</span><strong>{metrics[key] || 0}</strong><span>{label}</span><small>{sub}</small></button>)}</div><div className="admin-columns"><section className="admin-panel"><PanelHeading title="Recent learners" action="Learners" onClick={() => onNavigate("Learners")} />{data?.recentUsers.length ? <div className="admin-table"><div className="table-row table-head"><span>Learner</span><span>Language</span><span>Joined</span></div>{data.recentUsers.slice(0, 5).map((user) => <div className="table-row" key={user.id}><span><b>{user.display_name || "Unnamed learner"}</b><small>{user.id}</small></span><span>{titleCase(user.preferred_language || "—")}</span><span>{formatDate(user.created_at)}</span></div>)}</div> : <EmptyState text="No learner profiles yet." />}</section><section className="admin-panel"><PanelHeading title="Learning activity" action="Refresh" onClick={() => onNavigate("Overview")} />{data?.recentSessions.length ? <div className="activity-list">{data.recentSessions.slice(0, 5).map((session) => <div className="activity-row" key={String(session.id)}><span className="activity-dot">✦</span><span><b>{titleCase(String(session.session_type || "session"))}</b><small>{String((session.topics as { name?: string } | null)?.name || "General learning")} · {formatDate(session.started_at)}</small></span><em>{Number(session.duration_seconds || 0) ? `${Math.ceil(Number(session.duration_seconds) / 60)} min` : "Started"}</em></div>)}</div> : <EmptyState text="No learning sessions recorded." />}</section></div><div className="admin-command-strip"><div><span className="eyebrow">ADMIN SHORTCUTS</span><h2>Keep the learning loop healthy.</h2><p>Review content coverage, tune tutor behavior, and watch learner activity from one place.</p></div><div className="shortcut-actions"><button onClick={() => onNavigate("Curriculum")}>Manage curriculum ↗</button><button onClick={() => onNavigate("Settings")}>Tune tutor ↗</button></div></div></div>; }
+
+function Learners({ data }: { data: AdminData | null }) { return <div className="admin-view"><div className="section-intro"><span className="eyebrow">PEOPLE DIRECTORY</span><h2>Learner accounts</h2><p>Monitor onboarding, language preferences, and account roles. Detailed learner data stays protected behind the admin session.</p></div><section className="admin-panel wide-panel"><div className="admin-table"><div className="table-row table-head four-col"><span>Profile</span><span>Education</span><span>Role</span><span>Joined</span></div>{data?.recentUsers.map((user) => <div className="table-row four-col" key={user.id}><span><b>{user.display_name || "Unnamed learner"}</b><small>{user.id}</small></span><span>{titleCase(user.education_level || "—")}</span><span><mark className={user.role === "admin" ? "role-admin" : ""}>{user.role || "learner"}</mark></span><span>{formatDate(user.created_at)}</span></div>) || <EmptyState text="No learner profiles yet." />}</div></section></div>; }
+function Curriculum({ data }: { data: AdminData | null }) { return <div className="admin-view"><div className="management-hero"><div><span className="eyebrow">CONTENT STRUCTURE</span><h2>Curriculum control</h2><p>Subjects and topics are the backbone of adaptive mastery. Use the seeded catalog as your operating map.</p></div><div className="hero-count"><strong>{data?.metrics.subjects || 0}</strong><span>subjects</span><strong>{data?.metrics.topics || 0}</strong><span>topics</span></div></div><div className="management-grid"><button className="management-card"><span>＋</span><b>Add subject</b><small>Create a new learning domain and place it in the catalog.</small></button><button className="management-card"><span>＋</span><b>Add topic</b><small>Define concepts, prerequisites, and mastery checkpoints.</small></button><button className="management-card"><span>↕</span><b>Reorder catalog</b><small>Control the sequence learners see in My Learning.</small></button></div><div className="notice-panel"><b>Editorial controls are staged safely</b><p>The catalog is live and visible here. Write actions can be connected to this surface when you are ready to publish editorial changes.</p></div></div>; }
+function QuestionBank({ data }: { data: AdminData | null }) { return <div className="admin-view"><div className="management-hero"><div><span className="eyebrow">ASSESSMENT CONTENT</span><h2>Question bank</h2><p>Keep questions accurate, balanced across difficulty, and tied to a measurable concept.</p></div><div className="hero-count"><strong>{data?.metrics.questions || 0}</strong><span>questions</span><strong>{data?.metrics.tests || 0}</strong><span>tests run</span></div></div><section className="admin-panel wide-panel"><PanelHeading title="Recently added questions" action="Live" onClick={() => undefined} /><div className="question-list">{data?.recentQuestions.length ? data.recentQuestions.map((question) => <div className="question-row" key={String(question.id)}><span className="question-type">{titleCase(String(question.question_type || "question"))}</span><div><b>{String(question.question || "Untitled question")}</b><small>{String((question.topics as { name?: string } | null)?.name || "Unassigned topic")} · {titleCase(String(question.concept_tested || "general"))}</small></div><mark>Level {String(question.difficulty || 1)}</mark></div>) : <EmptyState text="No questions have been added yet." />}</div></section></div>; }
+
+function SettingsPanel({ settings, updateSetting, toggleStrategy, saveSettings, saving }: { settings: Settings; updateSetting: <Key extends keyof Settings>(key: Key, value: Settings[Key]) => void; toggleStrategy: (strategy: string) => void; saveSettings: (event: React.FormEvent<HTMLFormElement>) => void; saving: boolean }) { return <form className="settings-view" onSubmit={saveSettings}><div className="settings-save-row"><div><span className="eyebrow">PLATFORM CONFIGURATION</span><h2>Tutor and brand settings</h2><p>These defaults shape every learner experience.</p></div><button className="admin-primary" type="submit" disabled={saving}>{saving ? "Saving..." : "Save changes"}</button></div><div className="settings-layout"><section className="settings-block"><h3>Brand identity</h3><label>Brand name<input value={settings.brand_name} onChange={(event) => updateSetting("brand_name", event.target.value)} /></label><label>Tagline<input value={settings.tagline} onChange={(event) => updateSetting("tagline", event.target.value)} /></label><label>Logo URL<input value={settings.logo_url} onChange={(event) => updateSetting("logo_url", event.target.value)} placeholder="https://..." /></label></section><section className="settings-block"><h3>Tutor defaults</h3><label>Default language<select value={settings.default_language} onChange={(event) => updateSetting("default_language", event.target.value)}><option value="hinglish">Hinglish</option><option value="english">English</option><option value="hindi">Hindi</option></select></label><label>Learning goal<select value={settings.default_learning_goal} onChange={(event) => updateSetting("default_learning_goal", event.target.value)}><option value="understand_concept">Understand concept</option><option value="exam_preparation">Exam preparation</option><option value="practical_application">Practical application</option><option value="interview_preparation">Interview preparation</option></select></label><label>Core tutor instructions<textarea value={settings.tutor_instructions} onChange={(event) => updateSetting("tutor_instructions", event.target.value)} rows={5} /></label></section><section className="settings-block settings-wide"><h3>Teaching strategies</h3><div className="strategy-grid">{strategies.map((strategy) => <label className={`strategy-option ${settings.enabled_strategies.includes(strategy) ? "selected" : ""}`} key={strategy}><input type="checkbox" checked={settings.enabled_strategies.includes(strategy)} onChange={() => toggleStrategy(strategy)} /><span>{titleCase(strategy)}</span><b>{settings.enabled_strategies.includes(strategy) ? "✓" : ""}</b></label>)}</div></section><section className="settings-block"><h3>Usage limits</h3><label>Max input characters<input type="number" min={1000} max={50000} value={settings.max_input_length} onChange={(event) => updateSetting("max_input_length", Number(event.target.value))} /></label><label>Context messages<input type="number" min={4} max={50} value={settings.max_context_messages} onChange={(event) => updateSetting("max_context_messages", Number(event.target.value))} /></label></section></div></form>; }
