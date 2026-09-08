@@ -124,6 +124,8 @@ export interface MistakeRecord {
   resolved: boolean;
   first_occurred_at: string;
   last_occurred_at: string;
+  topic_name?: string;
+  subject_name?: string;
   topic?: TopicSummary;
 }
 
