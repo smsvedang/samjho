@@ -88,7 +88,8 @@ button { cursor: pointer; }
 @media (max-width: 680px) { .admin-topbar { grid-template-columns: auto 1fr; padding: 0 17px; }.admin-topbar .wordmark { justify-self: end; }.admin-status { display: none; }.admin-layout { display: block; }.admin-sidebar { display: flex; overflow-x: auto; flex-direction: row; gap: 5px; padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--line); }.admin-sidebar-label, .admin-sidebar-bottom { display: none; }.admin-nav-item { grid-template-columns: 1fr; width: auto; min-width: max-content; min-height: 35px; padding: 0 11px; border-left: 0; border-bottom: 2px solid transparent; }.admin-nav-item.active { border-bottom-color: var(--coral); }.admin-nav-index, .admin-nav-arrow { display: none; }.admin-main { padding: 30px 16px 55px; }.admin-page-heading { align-items: start; margin-bottom: 29px; }.admin-page-heading h1 { font-size: 34px; }.metric-grid { gap: 9px; }.admin-metric { min-height: 126px; padding: 16px; }.admin-metric strong { font-size: 24px; }.admin-panel { padding: 17px; }.table-row { grid-template-columns: 1.4fr .8fr; gap: 8px; }.table-row > :nth-child(3) { display: none; }.four-col { grid-template-columns: 1.4fr .8fr; }.four-col > :nth-child(3), .four-col > :nth-child(4) { display: none; }.admin-command-strip, .management-hero, .settings-save-row { display: grid; align-items: start; }.shortcut-actions { flex-wrap: wrap; }.management-grid, .settings-layout { grid-template-columns: 1fr; }.settings-block.settings-wide { grid-column: auto; }.settings-block .strategy-grid { grid-template-columns: 1fr 1fr; }.question-row { grid-template-columns: 70px 1fr; }.question-row mark { display: none; } }
 
 /* SAMJHO LEARNING PLATFORM STYLES */
-.nav-tabs { display: flex; align-items: center; gap: 6px; }
+.nav-tabs, .mobile-nav-tabs { display: flex; align-items: center; gap: 6px; }
+.mobile-nav-tabs { display: none; }
 .nav-tab { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; color: var(--muted); font-size: 12px; font-weight: 600; border: 0; border-radius: 7px; background: transparent; transition: all .2s; }
 .nav-tab:hover { color: var(--ink); background: #eef5ef; }
 .nav-tab.active { color: var(--teal); background: #e2ede5; font-weight: 700; }
@@ -403,5 +404,11 @@ button { cursor: pointer; }
   .revision-cards-grid, .dash-subjects-grid, .topics-list-grid, .mistakes-grid, .action-grid-buttons, .breakdown-cards-grid { grid-template-columns: 1fr; }
   .learning-container { padding: 20px 14px 70px; }
   .learning-modal { padding: 20px 16px; width: 95%; }
+}
+
+@media (max-width: 760px) {
+  .nav-tabs { display: none; }
+  .mobile-nav-tabs { display: grid; gap: 4px; margin: -8px -6px 22px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .mobile-nav-tabs .nav-tab { justify-content: flex-start; width: 100%; }
 }
 

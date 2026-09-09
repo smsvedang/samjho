@@ -428,7 +428,7 @@ export default function Home() {
     <main className="app-shell">
       {/* Top Header */}
       <header className="topbar">
-        <button className="mobile-menu" aria-label="Open navigation" aria-expanded={mobileSidebarOpen} onClick={() => setMobileSidebarOpen((open) => !open)}>☰</button>
+        <button className="mobile-menu" aria-label={mobileSidebarOpen ? "Close navigation" : "Open navigation"} aria-expanded={mobileSidebarOpen} onClick={() => setMobileSidebarOpen((open) => !open)}>☰</button>
         <div className="wordmark"><BrandMark logoUrl={brand.logo_url} /><span>{brand.brand_name.toLowerCase()}</span></div>
 
         {/* Top Center Navigation Tabs */}
