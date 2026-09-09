@@ -500,6 +500,13 @@ export default function Home() {
       <div className="workspace">
         {/* Sidebar (Always accessible for AI Chat history & quick tools) */}
         <aside className={`sidebar ${mobileSidebarOpen ? "mobile-open" : ""}`}>
+          <nav className="mobile-nav-tabs" aria-label="Mobile main navigation">
+            <button type="button" className={`nav-tab ${activeTab === "chat" ? "active" : ""}`} onClick={() => { setActiveTab("chat"); setMobileSidebarOpen(false); }}><span className="nav-tab-icon">✦</span> AI Tutor</button>
+            <button type="button" className={`nav-tab ${activeTab === "dashboard" ? "active" : ""}`} onClick={() => { setActiveTab("dashboard"); setMobileSidebarOpen(false); }}><span className="nav-tab-icon">📊</span> Dashboard</button>
+            <button type="button" className={`nav-tab ${activeTab === "learning" ? "active" : ""}`} onClick={() => { setActiveTab("learning"); setMobileSidebarOpen(false); }}><span className="nav-tab-icon">📚</span> My Learning</button>
+            <button type="button" className={`nav-tab ${activeTab === "mistakes" ? "active" : ""}`} onClick={() => { setActiveTab("mistakes"); setMobileSidebarOpen(false); }}><span className="nav-tab-icon">⚠️</span> Mistakes</button>
+            <button type="button" className={`nav-tab ${activeTab === "revision" ? "active" : ""}`} onClick={() => { setActiveTab("revision"); setMobileSidebarOpen(false); }}><span className="nav-tab-icon">⏱</span> Revision</button>
+          </nav>
           <button className="new-chat" onClick={startNewChat}><span>+</span> New chat</button>
           <label className="search-box"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search lessons" aria-label="Search lessons" /><kbd>⌘ K</kbd></label>
           <div className="history-heading"><span>Your learning</span><div className="menu-wrap"><button aria-label="More history options" aria-expanded={historyMenuOpen} onClick={() => { setHistoryMenuOpen((open) => !open); setProfileOpen(false); setConversationMenuOpen(false); }}>•••</button>{historyMenuOpen && <div className="small-menu"><button onClick={() => { setConversations([]); setSelectedId(null); setHistoryMenuOpen(false); }}>Clear local history</button><button onClick={() => { startNewChat(); setHistoryMenuOpen(false); }}>New learning session</button></div>}</div></div>
