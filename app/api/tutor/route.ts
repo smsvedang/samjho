@@ -37,7 +37,12 @@ function parseWorksheet(content: string): Worksheet | null {
 
 function worksheetMarkdown(worksheet: Worksheet) {
   const marker = `<!-- SAMJHO_WORKSHEET\n${JSON.stringify(worksheet)}\n-->`;
-  const questions = worksheet.questions.map((question, index) => `${index + 1}. ${question.question}${question.options?.length ? `\n   ${question.options.map((option) => `- ${option}`).join("\n   ")}` : "\n   \n   Answer: ______________________________"}`).join("\n\n");
+  const questions = worksheet.questions.map((question, index) => {
+    const options = question.options?.length
+      ? question.options.map((option, optionIndex) => `${String.fromCharCode(65 + optionIndex)}. ${option}`).join("\n")
+      : "Answer: ______________________________________________";
+    return `### Question ${index + 1}\n\n${question.question}\n\n${options}`;
+  }).join("\n\n");
   return `${marker}\n\n## ${worksheet.title}\n\n${worksheet.instructions}\n\n${questions}`;
 }
 
@@ -101,8 +106,8 @@ export async function POST(request: NextRequest) {
   }
 
   const system = worksheetRequest
-    ? `You are ${settings.brand_name}, an adaptive AI tutor. The learner wants a question worksheet. ${languageInstruction} Return ONLY valid JSON, with no Markdown or code fences, matching this shape: {"title":"...","subject":"...","instructions":"...","questions":[{"question":"...","options":["..."],"answer":"..."}],"answerKey":["..."]}. Generate 8-12 accurate, age-appropriate questions about the requested topic. Mix conceptual and application questions. Include options only for multiple-choice questions; omit options for open questions. Keep answers concise. Do not leave questions blank.`
-    : `You are ${settings.brand_name}, an adaptive AI tutor. Teach for understanding, not just answers. ${languageInstruction} ${settings.tutor_instructions} ${adaptationDirectives} Available teaching strategies: ${settings.enabled_strategies.join(", ")}. Be accurate, clear, and concise. Ask a useful follow-up question when appropriate. Format math with Markdown-compatible LaTeX: use $...$ for inline math and $$...$$ for display math. Do not wrap formulas in plain square brackets, and do not escape subscript underscores inside math. For example, write $$\\sum_{i=1}^{n} V_i = 0$$.`;
+    ? `You are ${settings.brand_name}, an adaptive AI tutor. The learner wants a question worksheet. ${languageInstruction} Return ONLY valid JSON, with no Markdown or code fences, matching this shape: {"title":"...","subject":"...","instructions":"...","questions":[{"question":"...","options":["..."],"answer":"..."}],"answerKey":["..."]}. Generate 8-12 accurate, age-appropriate questions about the exact topic requested. Never substitute a related topic. Mix conceptual and application questions. Include options only for multiple-choice questions; omit options for open questions. Keep answers concise. Do not leave questions blank.`
+    : `You are ${settings.brand_name}, an adaptive AI tutor. Teach for understanding, not just answers. ${languageInstruction} ${settings.tutor_instructions} ${adaptationDirectives} Available teaching strategies: ${settings.enabled_strategies.join(", ")}. Be accurate, clear, and concise. Ask a useful follow-up question when appropriate. Format math with Markdown-compatible LaTeX: use $...$ for inline math and $$...$$ for display math. Do not wrap formulas in plain square brackets, and do not escape subscript underscores inside math. If the learner asks for a flowchart, algorithm, process diagram, or says they cannot make one, explain the logic briefly and then return a valid Mermaid flowchart in a fenced block using \`\`\`mermaid, with simple quoted node labels and no unsupported HTML. For other answers, use clear headings, numbered steps for procedures, and separate final answers from explanations. For example, write $$\\sum_{i=1}^{n} V_i = 0$$.`;
 
   let response: Response;
   try {

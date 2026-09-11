@@ -76,7 +76,8 @@ export async function getAdaptiveQuestions(
       .from("questions")
       .select("*")
       .eq("topic_id", topic_id)
-      .eq("difficulty", difficulty);
+      .order("difficulty", { ascending: true })
+      .limit(Math.max(count * 3, count));
 
     if (exclude_question_ids.length > 0) {
       query = query.not("id", "in", `(${exclude_question_ids.join(",")})`);
@@ -86,9 +87,10 @@ export async function getAdaptiveQuestions(
       query = query.eq("concept_tested", target_concept);
     }
 
-    const { data, error } = await query.limit(count);
+    const { data, error } = await query;
     if (!error && data && data.length > 0) {
-      for (const row of data) {
+      const orderedRows = [...data].sort((a, b) => Math.abs(Number(a.difficulty) - difficulty) - Math.abs(Number(b.difficulty) - difficulty));
+      for (const row of orderedRows.slice(0, count)) {
         collectedQuestions.push({
           id: row.id,
           subject_id: row.subject_id,

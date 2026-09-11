@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkMath from "remark-math";
+import remarkGfm from "remark-gfm";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { getFirebaseAuth } from "@/lib/firebase/client";
 import { Subject, TopicSummary, UserLearningProfile } from "@/lib/learning/types";
@@ -375,6 +376,12 @@ export default function Home() {
       const found = (s.topics || []).find((t) => t.id === topicId);
       if (found) return found;
     }
+    const latestUserMessage = [...selected.messages].reverse().find((message) => message.role === "user")?.content.toLowerCase() || "";
+    const matchingTopic = subjects.flatMap((subject) => subject.topics || []).find((topic) => {
+      const terms = [topic.name, topic.slug, ...topic.key_concepts].map((term) => term.toLowerCase().replace(/[-_]/g, " "));
+      return terms.some((term) => term.length > 2 && latestUserMessage.includes(term));
+    });
+    if (matchingTopic) return matchingTopic;
     return subjects[0]?.topics?.[0] || {
       id: "kvl",
       subject_id: "default",
@@ -395,6 +402,7 @@ export default function Home() {
     setPracticeConfig({
       topicId,
       topicName,
+      subjectId: findTopicOrFallback(topicId).subject_id,
       targetConcept: concept,
     });
   }
@@ -790,7 +798,7 @@ function MessageBubble({
         {message.role === "assistant" && <span className="assistant-label">SAMJHO <span>✦</span></span>}
         {message.role === "assistant" ? (
           <>
-            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+            <ReactMarkdown remarkPlugins={[remarkMath, remarkGfm]} rehypePlugins={[rehypeKatex]}>
               {normalizeMathDelimiters(displayContent)}
             </ReactMarkdown>
 
@@ -899,17 +907,28 @@ async function downloadWorksheet(worksheet: Worksheet) {
   write(worksheet.instructions, 11, [72, 87, 80], 16);
   y += 10;
   worksheet.questions.forEach((question, index) => {
-    const optionText = question.options?.map((option, optionIndex) => `${String.fromCharCode(65 + optionIndex)}. ${option}`).join("\n") || "Answer: ______________________________________________";
-    const questionText = `${index + 1}. ${question.question}\n${optionText}`;
-    const maxQuestionWidth = Math.max(pageWidth - margin * 2 - 18, 120);
-    const lines = pdf.splitTextToSize(questionText, maxQuestionWidth) as string[];
-    const blockHeight = lines.length * 17 + 12;
+    const questionLines = pdf.splitTextToSize(question.question, pageWidth - margin * 2 - 36) as string[];
+    const optionText = question.options?.length
+      ? question.options.map((option, optionIndex) => `${String.fromCharCode(65 + optionIndex)}. ${option}`).join("\n")
+      : "Answer: ______________________________________________";
+    const optionLines = pdf.splitTextToSize(optionText, pageWidth - margin * 2 - 36) as string[];
+    const blockHeight = (questionLines.length + optionLines.length) * 16 + 34;
     ensureSpace(blockHeight);
-    pdf.setFont("helvetica", "normal");
+    pdf.setDrawColor(214, 226, 219);
+    pdf.setFillColor(250, 252, 250);
+    pdf.roundedRect(margin, y - 14, pageWidth - margin * 2, blockHeight, 6, 6, "FD");
+    pdf.setFont("helvetica", "bold");
     pdf.setFontSize(11);
+    pdf.setTextColor(35, 105, 93);
+    pdf.text(`Question ${index + 1}`, margin + 14, y + 2);
+    y += 20;
+    pdf.setFont("helvetica", "normal");
     pdf.setTextColor(27, 48, 42);
-    pdf.text(lines, margin + 4, y);
-    y += blockHeight;
+    pdf.text(questionLines, margin + 14, y);
+    y += questionLines.length * 16 + 8;
+    pdf.setTextColor(72, 87, 80);
+    pdf.text(optionLines, margin + 14, y);
+    y += optionLines.length * 16 + 18;
   });
   if (worksheet.answerKey?.length) {
     ensureSpace(52);
