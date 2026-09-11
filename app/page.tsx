@@ -371,16 +371,17 @@ export default function Home() {
   }
 
   // Helpers to find topic by id or fallback to default
-  function findTopicOrFallback(topicId?: string): TopicSummary {
+  function findTopicOrFallback(topicId?: string, messageContext = ""): TopicSummary {
     for (const s of subjects) {
       const found = (s.topics || []).find((t) => t.id === topicId);
       if (found) return found;
     }
-    const latestUserMessage = [...selected.messages].reverse().find((message) => message.role === "user")?.content.toLowerCase() || "";
-    const matchingTopic = subjects.flatMap((subject) => subject.topics || []).find((topic) => {
-      const terms = [topic.name, topic.slug, ...topic.key_concepts].map((term) => term.toLowerCase().replace(/[-_]/g, " "));
-      return terms.some((term) => term.length > 2 && latestUserMessage.includes(term));
-    });
+    const conversationText = `${messageContext} ${selected.messages.map((message) => message.content).join(" ")}`.toLowerCase();
+    const matchingTopic = subjects
+      .flatMap((subject) => subject.topics || [])
+      .map((topic) => ({ topic, terms: [topic.name, topic.slug].map((term) => term.toLowerCase().replace(/[-_]/g, " ")) }))
+      .filter(({ terms }) => terms.some((term) => term.length > 2 && conversationText.includes(term)))
+      .sort((a, b) => Math.max(...b.terms.map((term) => term.length)) - Math.max(...a.terms.map((term) => term.length)))[0]?.topic;
     if (matchingTopic) return matchingTopic;
     return subjects[0]?.topics?.[0] || {
       id: "kvl",
@@ -562,7 +563,7 @@ export default function Home() {
                       key={message.id}
                       message={message}
                       onActionClick={(action) => {
-                        const top = findTopicOrFallback();
+                        const top = findTopicOrFallback(undefined, message.content);
                         if (action === "practice") launchPracticeForTopic(top.id, top.name);
                         else if (action === "diagnostic") launchDiagnosticForTopic(top);
                         else if (action === "test") launchTestForTopic(top);
@@ -967,5 +968,5 @@ function normalizeMathDelimiters(content: string) {
 }
 
 function normalizeMathContent(math: string) {
-  return math.replaceAll("\\_", "_").trim();
+  return math.replaceAll("\\_", "_").replace(/\\text\s+([A-Za-z]+)/g, "\\text{$1}").trim();
 }
