@@ -1,0 +1,18 @@
+{
+  "name": "Samjho AI",
+  "short_name": "Samjho",
+  "description": "Privacy-first AI companion & general-purpose assistant. Talk freely without introducing yourself.",
+  "start_url": "/chat",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#685FE0",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

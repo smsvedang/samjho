@@ -1,21 +1,46 @@
-const CACHE_NAME = "samjho-shell-v1";
-const APP_SHELL = ["/", "/login", "/signup", "/logo.png"];
+const CACHE_NAME = 'samjho-v1';
+const STATIC_ASSETS = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/logo.svg',
+];
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+  );
   self.skipWaiting();
 });
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      )
+    )
+  );
+  self.clients.claim();
 });
 
-self.addEventListener("fetch", (event) => {
-  const requestUrl = new URL(event.request.url);
-  if (event.request.method !== "GET" || requestUrl.origin !== self.location.origin || requestUrl.pathname.startsWith("/api/")) return;
-  event.respondWith(fetch(event.request).then((response) => {
-    const copy = response.clone();
-    void caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-    return response;
-  }).catch(() => caches.match(event.request).then((response) => response || caches.match("/"))));
+self.addEventListener('fetch', (event) => {
+  // Only handle GET requests and skip model weight chunk streams (which WebLLM caches in Cache API directly)
+  if (event.request.method !== 'GET') return;
+  
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      if (cached) return cached;
+      return fetch(event.request).catch(() => {
+        // Offline fallback
+        if (event.request.headers.get('accept')?.includes('text/html')) {
+          return caches.match('/index.html');
+        }
+      });
+    })
+  );
 });

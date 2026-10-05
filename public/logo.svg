@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="samjhoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#685FE0" />
+      <stop offset="100%" stop-color="#8B5CF6" />
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FCD34D" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#F59E0B" stop-opacity="0.2" />
+    </radialGradient>
+  </defs>
+  <!-- Base circle badge -->
+  <rect width="100" height="100" rx="28" fill="url(#samjhoGrad)" />
+  <!-- Radiant warmth aura -->
+  <circle cx="50" cy="50" r="32" fill="url(#sunGlow)" />
+  <!-- Minimal Sun / Understanding beacon (☼ symbol modern geometry) -->
+  <circle cx="50" cy="50" r="14" fill="#FFFFFF" />
+  <!-- Ray petals -->
+  <circle cx="50" cy="22" r="3.5" fill="#FFFFFF" opacity="0.9" />
+  <circle cx="50" cy="78" r="3.5" fill="#FFFFFF" opacity="0.9" />
+  <circle cx="22" cy="50" r="3.5" fill="#FFFFFF" opacity="0.9" />
+  <circle cx="78" cy="50" r="3.5" fill="#FFFFFF" opacity="0.9" />
+  <circle cx="30" cy="30" r="3" fill="#FFFFFF" opacity="0.75" />
+  <circle cx="70" cy="30" r="3" fill="#FFFFFF" opacity="0.75" />
+  <circle cx="30" cy="70" r="3" fill="#FFFFFF" opacity="0.75" />
+  <circle cx="70" cy="70" r="3" fill="#FFFFFF" opacity="0.75" />
+</svg>
