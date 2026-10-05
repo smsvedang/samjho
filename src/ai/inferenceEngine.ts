@@ -79,29 +79,47 @@ function generateAttachmentResponse(
             if (nameMatch) name = nameMatch[1].trim();
           }
 
-          const orgMatch = text.match(/([A-Z0-9\s]{3,})\s*(?:official|organisation|organization|company|institute|university)/i);
-          let org = orgMatch ? orgMatch[0].trim() : '';
-          if (!org && /chill\s*gu/i.test(text)) {
+          // 2. Organization
+          let org = '';
+          if (/chill\s*gu/i.test(text)) {
             org = 'Chill Guys Official Organisation';
+          } else {
+            const oMatch = text.match(/([A-Za-z\s]{3,})\s*(?:official\s*organisation|organisation|organization)/i);
+            if (oMatch) org = oMatch[0].trim();
           }
 
-          const idMatch = text.match(/(?:member\s*id|id|card\s*no|emp\s*id)[\s:\-=]*([A-Z0-9_-]+)/i);
+          // 3. Member ID (CG001, EMP123, ID100)
+          const idMatch = text.match(/\b([A-Z]{1,4}\d{2,6})\b/i) || text.match(/id[:\s\-]*([A-Z0-9_-]+)/i);
           const memberId = idMatch ? idMatch[1].trim() : '';
 
-          const desigMatch = text.match(/(?:designation|role|post)[\s:\-=]*([A-Za-z\s]+?)(?=\n|\r|department|blood|$)/i);
-          const designation = desigMatch ? desigMatch[1].replace(/^[J/\\|>\s]+/, '').trim() : 'Member';
+          // 4. Blood Group
+          const bgMatch = text.match(/(?:blood\s*group|bg)?[^\w]*([ABO][+-])/i);
+          const bloodGroup = bgMatch ? bgMatch[1].trim() : '';
 
-          const deptMatch = text.match(/(?:department|dept)[\s:\-/=>]*([A-Za-z0-9\s]+?)(?=\n|\r|blood|contact|$)/i);
-          const department = deptMatch ? deptMatch[1].replace(/^[)>/\s|pP=]+/, '').trim() : '';
+          // 5. Contact (10 digit phone number)
+          const phoneMatch = text.match(/(?:[+0-9\s=-]{9,})?(\d{10})/);
+          const contact = phoneMatch ? phoneMatch[1].trim() : '';
 
-          const bloodMatch = text.match(/(?:blood\s*group|bg)[\s:\-=]*([ABO][+-])/i);
-          const bloodGroup = bloodMatch ? bloodMatch[1].trim() : '';
+          // 6. Validity Date
+          const dateMatch = text.match(/(?:until|validity)?\s*O?(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i);
+          const validity = dateMatch ? dateMatch[1].trim() : '';
 
-          const contactMatch = text.match(/(?:contact|phone|mobile|call)[\s:\-=]*([0-9\s+-]{10,})/i);
-          const contact = contactMatch ? contactMatch[1].replace(/[^0-9+]/g, '').trim() : '';
-
-          const validMatch = text.match(/(?:valid\s*until|validity|expiry)[\s:\-=]*([^\n\r]+)/i);
-          const validity = validMatch ? validMatch[1].replace(/valid\s*until/i, '').trim() : '';
+          // 7. Department & Designation
+          let designation = 'Member';
+          let department = '';
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (/designation/i.test(line) && lines[i + 1]) {
+              const next = lines[i + 1];
+              const clean = next.replace(/\b[A-Z]{1,4}\d{2,6}\b/g, '').replace(/^[J/\\|>\s]+/, '').trim();
+              if (clean) designation = clean;
+            }
+            if (/department/i.test(line) && lines[i + 1]) {
+              const next = lines[i + 1];
+              const clean = next.replace(/\s*[ABO][+-].*/i, '').replace(/^[)>/\s|pP=>]+/, '').trim();
+              if (clean) department = clean;
+            }
+          }
 
           // User asked: "who is this" / "kaun hai" / "kiska hai"
           if (query.includes('who') || query.includes('kaun') || query.includes('kiska') || query.includes('name') || query.includes('naam')) {
