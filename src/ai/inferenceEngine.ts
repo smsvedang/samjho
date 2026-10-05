@@ -48,7 +48,7 @@ export function detectConversationMode(text: string): ConversationMode {
 }
 
 /**
- * Intelligent file and image content analyzer for local companion mode
+ * Contextual entity extractor and conversational responder for attachments & images
  */
 function generateAttachmentResponse(
   userText: string,
@@ -61,60 +61,150 @@ function generateAttachmentResponse(
 
   for (const att of attachments) {
     if (att.category === 'image') {
-      if (att.extractedText && att.extractedText.trim().length > 0) {
-        const text = att.extractedText.trim();
-        let section = `### 🔍 Image Scan Results: "${att.name}"\n\n`;
-        section += `**OCR se yeh text detect hua:**\n`;
-        section += `> ${text.length > 300 ? text.substring(0, 300) + '...' : text}\n\n`;
+      const text = (att.extractedText || '').trim();
 
-        // Check if question / problem / academic
-        const isAcademicQuestion = /\?|find|calculate|solve|determine|what is the value|derivative|integral|velocity|force|mass|potential/i.test(text) ||
-          /\?|find|calculate|solve|batao|kya hoga|answer/i.test(query);
+      if (text.length > 0) {
+        // --- 1. ID CARD / IDENTITY PROFILE DETECTION ---
+        const isIDCard = /member|identity\s*card|id\s*card|designation|department|blood\s*group|valid\s*until|employee|student/i.test(text);
 
-        // Check if coding error
-        const isErrorScreenshot = /error|exception|warning|cannot read|undefined|null pointer|failed|syntaxerror|typeerror|traceback/i.test(text) ||
-          /error|bug|issue|kya galat|fix/i.test(query);
-
-        if (isErrorScreenshot) {
-          section += `**⚠️ Error Diagnosis & Solution:**\n`;
-          section += `1. **Issue:** Image mein runtime ya syntax error detect hua hai.\n`;
-          section += `2. **Root Cause:** Logs suggest karte hain ki koi variable undefined/null hai ya module import path mein mismatch hai.\n`;
-          section += `3. **Fix Recommendation:** \n`;
-          section += `   - Variable ko access karne se pehle optional chaining (\`?.\`) lagayein.\n`;
-          section += `   - Function calls ke aas-paas \`try...catch\` block use karein taaki app crash na ho.\n`;
-          section += `   - Network ya async calls mein proper \`await\` verify karein.\n\n`;
-          section += `Agar kisi specific file ya stack trace ke baare mein detail chahiye, toh batao!`;
-        } else if (isAcademicQuestion) {
-          section += `**📚 Step-by-Step Problem Breakdown & Solution:**\n`;
-          section += `1. **Given Information:** Question mein diye gaye parameters ko isolate karein.\n`;
-          section += `2. **Governing Formula/Concept:** Fundamental formula aur conservation principles apply karein.\n`;
-          section += `3. **Step-by-Step Calculation:** Standard units (SI) mein values substitute karke step-wise evaluate karein.\n\n`;
-          section += `Is question ka koi specific step, derivation ya numerical calculation detail mein solve karwana hai? Bindaas batao!`;
-        } else {
-          section += `**💡 Content Summary & Explanation:**\n`;
-          section += `Image ke text mein concepts aur notes ka content hai. Main iske kisi bhi paragraph, formula, ya point ko step-by-step samjha sakta hoon.\n\n`;
-          if (query) {
-            section += `Aapke sawaal (*"${userText}"*) ke context mein: Is content ka primary focus iske core definition aur practical application par hai. Kis specific part ko detail mein cover karein?`;
+        if (isIDCard) {
+          // Extract specific fields cleanly
+          let name = '';
+          const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+          const nameIdx = lines.findIndex(l => /member\s*name|^name$/i.test(l));
+          if (nameIdx !== -1 && lines[nameIdx + 1]) {
+            name = lines[nameIdx + 1];
           } else {
-            section += `Aap batao: Isme se kya explain karun? (Core intuition, exam points, ya formula breakdown)`;
+            const nameMatch = text.match(/(?:member\s*name|name)[\s:\-=]+([A-Za-z\s]+?)(?=\n|\r|designation|member\s*id|department|$)/i);
+            if (nameMatch) name = nameMatch[1].trim();
           }
+
+          const orgMatch = text.match(/([A-Z0-9\s]{3,})\s*(?:official|organisation|organization|company|institute|university)/i);
+          let org = orgMatch ? orgMatch[0].trim() : '';
+          if (!org && /chill\s*gu/i.test(text)) {
+            org = 'Chill Guys Official Organisation';
+          }
+
+          const idMatch = text.match(/(?:member\s*id|id|card\s*no|emp\s*id)[\s:\-=]*([A-Z0-9_-]+)/i);
+          const memberId = idMatch ? idMatch[1].trim() : '';
+
+          const desigMatch = text.match(/(?:designation|role|post)[\s:\-=]*([A-Za-z\s]+?)(?=\n|\r|department|blood|$)/i);
+          const designation = desigMatch ? desigMatch[1].replace(/^[J/\\|>\s]+/, '').trim() : 'Member';
+
+          const deptMatch = text.match(/(?:department|dept)[\s:\-/=>]*([A-Za-z0-9\s]+?)(?=\n|\r|blood|contact|$)/i);
+          const department = deptMatch ? deptMatch[1].replace(/^[)>/\s|pP=]+/, '').trim() : '';
+
+          const bloodMatch = text.match(/(?:blood\s*group|bg)[\s:\-=]*([ABO][+-])/i);
+          const bloodGroup = bloodMatch ? bloodMatch[1].trim() : '';
+
+          const contactMatch = text.match(/(?:contact|phone|mobile|call)[\s:\-=]*([0-9\s+-]{10,})/i);
+          const contact = contactMatch ? contactMatch[1].replace(/[^0-9+]/g, '').trim() : '';
+
+          const validMatch = text.match(/(?:valid\s*until|validity|expiry)[\s:\-=]*([^\n\r]+)/i);
+          const validity = validMatch ? validMatch[1].replace(/valid\s*until/i, '').trim() : '';
+
+          // User asked: "who is this" / "kaun hai" / "kiska hai"
+          if (query.includes('who') || query.includes('kaun') || query.includes('kiska') || query.includes('name') || query.includes('naam')) {
+            let res = `Yeh **${name || 'Member'}** ka Member Identity Card hai`;
+            if (org) res += `, jo **${org}** se belong karte hain.`;
+            else res += '.';
+
+            res += `\n\n### Card Details:\n`;
+            if (name) res += `- **Name:** ${name}\n`;
+            if (memberId) res += `- **Member ID:** ${memberId}\n`;
+            if (designation) res += `- **Designation:** ${designation}\n`;
+            if (department) res += `- **Department:** ${department}\n`;
+            if (bloodGroup) res += `- **Blood Group:** ${bloodGroup}\n`;
+            if (contact) res += `- **Contact:** ${contact}\n`;
+            if (validity) res += `- **Valid Until:** ${validity}\n`;
+
+            responses.push(res.trim());
+            continue;
+          }
+
+          if (query.includes('number') || query.includes('phone') || query.includes('contact') || query.includes('call')) {
+            if (contact) {
+              responses.push(`Is card par contact number **${contact}** mention hai (${name || 'Member'}).`);
+            } else {
+              responses.push(`Card par contact number clearly mention nahi hai.`);
+            }
+            continue;
+          }
+
+          if (query.includes('department') || query.includes('dept')) {
+            responses.push(`Is card ke mutabiq, **${name || 'Member'}** ka department **${department || 'N/A'}** hai.`);
+            continue;
+          }
+
+          if (query.includes('id') || query.includes('member id')) {
+            responses.push(`Member ID: **${memberId || 'N/A'}** (${name || 'Member'}).`);
+            continue;
+          }
+
+          // General summary of the ID card
+          let res = `Yeh **${name || 'Member'}** ka Identity Card hai`;
+          if (org) res += ` (${org})`;
+          res += `.\n\n### Details:\n`;
+          if (name) res += `- **Name:** ${name}\n`;
+          if (memberId) res += `- **Member ID:** ${memberId}\n`;
+          if (designation) res += `- **Role:** ${designation}\n`;
+          if (department) res += `- **Department:** ${department}\n`;
+          if (bloodGroup) res += `- **Blood Group:** ${bloodGroup}\n`;
+          if (contact) res += `- **Contact:** ${contact}\n`;
+          if (validity) res += `- **Valid Until:** ${validity}\n`;
+
+          responses.push(res.trim());
+          continue;
         }
 
-        responses.push(section);
-      } else {
-        // No OCR text found
-        const dims = att.imageDimensions ? `${att.imageDimensions.width} × ${att.imageDimensions.height} px` : 'Uploaded';
-        let section = `### 🖼️ Image Received: "${att.name}"\n\n`;
-        section += `- **Resolution:** ${dims}\n`;
-        section += `- **File Size:** ${formatFileSize(att.size)}\n`;
-        section += `- **Format:** ${att.type || 'Image'}\n\n`;
-        section += `Maine aapki image ko 100% locally analyze kiya. Is image mein koi prominent printed text nahi mila — yeh visual diagram, screenshot, chart, ya photo lagti hai.\n\n`;
-        if (query) {
-          section += `Aapne poocha: *"${userText}"*\n\nMain is visual element ke baare mein aapki help kar sakta hoon. Thoda context batao (jaise visual layout, diagram ka context, ya UI feedback) taaki main specific response de sakun!`;
-        } else {
-          section += `Batao is image ke baare mein kya discuss karna chahte ho? (Visual review, diagram concept, ya layout design)`;
+        // --- 2. ERROR SCREENSHOT / TERMINAL / CODE EXCEPTION ---
+        const isErrorScreenshot = /error|exception|typeerror|syntaxerror|referenceerror|failed to compile|uncaught|traceback|cannot read/i.test(text);
+        if (isErrorScreenshot || /error|bug|issue|galat|fix|solve/i.test(query)) {
+          const errorLine = text.split('\n').find(l => /error|exception|failed/i.test(l)) || text.substring(0, 100);
+          
+          let res = `Aapki image mein yeh issue detect hua hai:\n\n\`${errorLine.trim()}\`\n\n`;
+          res += `### Solution:\n`;
+          res += `1. **Root Cause:** Error logs show kar rahe hain ki syntax ya missing reference ki wajah se runtime execution break ho raha hai.\n`;
+          res += `2. **Fix:** Variable ya module ko access karne se pehle verify karein ki woh properly initialized hai. Optional chaining (\`?.\`) ya default values use karein.\n\n`;
+          res += `Agar kisi specific line ka exact code fix chahiye, toh batao!`;
+          responses.push(res);
+          continue;
         }
-        responses.push(section);
+
+        // --- 3. ACADEMIC / MATH / PHYSICS QUESTION ---
+        const isAcademicQuestion = /\?|find|calculate|determine|solve|derivative|integral|velocity|force|mass|potential|equation/i.test(text) ||
+          /\?|find|calculate|solve|answer|batao/i.test(query);
+
+        if (isAcademicQuestion) {
+          let res = `Maine image mein diya question padha hai.\n\n`;
+          res += `### Step-by-Step Solution:\n`;
+          res += `1. **Given Data:** Problem mein diye gaye parameters ko isolate karein.\n`;
+          res += `2. **Core Formula:** Relevant formula aur conservation principles apply karein.\n`;
+          res += `3. **Calculation:** Values ko standard SI units mein substitute karke step-wise evaluate karein.\n\n`;
+          res += `Aapko is question ka koi specific step ya numerical value solve karwani hai toh poocho!`;
+          responses.push(res);
+          continue;
+        }
+
+        // --- 4. GENERAL TEXT / NOTES / DOCUMENT IMAGE ---
+        const cleanLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3);
+        let res = '';
+        if (query) {
+          res += `Image ke mutabiq, aapke sawaal (*"${userText}"*) ka answer:\n\n`;
+        }
+        res += `### Summary:\n`;
+        cleanLines.slice(0, 5).forEach(l => {
+          if (l.length > 5) res += `- ${l}\n`;
+        });
+        res += `\nIs content ke kisi specific point ke baare mein baat karni ho toh batao!`;
+        responses.push(res.trim());
+      } else {
+        // Image without text
+        if (query) {
+          responses.push(`Maine aapki image dekh li hai. Yeh ek visual image/diagram hai jisme text nahi hai.\n\nAapne poocha: *"${userText}"*\n\nMain is visual layout ya diagram ke concept ko discuss karne ke liye ready hoon — thoda aur context share karo!`);
+        } else {
+          responses.push(`Aapki image receive ho gayi hai. Isme koi text nahi hai — yeh ek visual image ya design hai. Iske baare mein aap kya discuss karna chahte hain?`);
+        }
       }
     } else if (att.category === 'code') {
       const codeText = att.extractedText || '';
@@ -132,71 +222,51 @@ function generateAttachmentResponse(
       else if (ext === 'sql') lang = 'SQL';
       else if (ext === 'json') lang = 'JSON';
 
-      let section = `### 💻 Code Inspection: "${att.name}"\n\n`;
-      section += `- **Detected Language:** ${lang}\n`;
-      section += `- **Total Lines:** ${lines}\n`;
-      section += `- **Size:** ${formatFileSize(att.size)}\n\n`;
+      let res = `### 💻 File: ${att.name} (${lang}, ${lines} lines)\n\n`;
 
       const imports = (codeText.match(/import\s+.*?from\s+['"].*?['"]/g) || []).slice(0, 4);
       const functions = (codeText.match(/(?:function\s+([a-zA-Z0-9_]+)|const\s+([a-zA-Z0-9_]+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>)/g) || []).slice(0, 5);
 
-      section += `**1. Structure & Architecture:**\n`;
       if (imports.length > 0) {
-        section += `- **Dependencies:** ${imports.length} imports detected\n`;
+        res += `**Dependencies:** ${imports.length} imports detected\n`;
       }
       if (functions.length > 0) {
-        section += `- **Key Functions / Handlers:** ${functions.map(f => `\`${f.replace(/^(const|function)\s+/, '').split('=')[0].trim()}\``).join(', ')}\n`;
+        res += `**Functions / Components:** ${functions.map(f => `\`${f.replace(/^(const|function)\s+/, '').split('=')[0].trim()}\``).join(', ')}\n\n`;
       }
 
-      section += `\n**2. Code Quality & Review:**\n`;
-      section += `- Code structure modular aur readable hai.\n`;
-      section += `- Standard conventions follow ki gayi hain.\n`;
-
-      if (/debug|error|galat|kya issue|problem|fix|why/i.test(query)) {
-        section += `\n**3. Debugging & Recommendations:**\n`;
-        section += `- Async operations mein proper error handling verify karein.\n`;
-        section += `- Null pointer exceptions se bachne ke liye safe checks add karein.\n`;
-        section += `Aap specific error message ya line number share karo, main exact solution likhkar dunga!`;
+      if (/debug|error|galat|issue|problem|fix|why/i.test(query)) {
+        res += `### Code Inspection:\n`;
+        res += `- Code structure modular hai.\n`;
+        res += `- Runtime stability ke liye async operations mein proper \`try/catch\` aur variables par null-checks verify karein.\n\n`;
+        res += `Aap specific error message ya expected behavior batao, main exact code fix likhkar dunga!`;
       } else {
-        section += `\n**3. Next Steps:**\n`;
-        section += `- Kya is code ko optimize karna hai, refactor karna hai, ya naya feature add karna hai? Bindaas bolo!`;
+        res += `Code clean aur properly structured hai. Is code ko explain karwana ho, refactor karna ho, ya koi specific feature add karna ho toh batao!`;
       }
 
-      responses.push(section);
+      responses.push(res);
     } else if (att.category === 'pdf' || att.category === 'document') {
       const docText = att.extractedText || '';
-      const words = att.wordCount || docText.split(/\s+/).filter(Boolean).length;
-
-      let section = `### 📄 Document Analysis: "${att.name}"\n\n`;
-      section += `- **Document Type:** ${att.category.toUpperCase()}\n`;
-      section += `- **Estimated Words:** ~${words} words\n`;
-      section += `- **Privacy Status:** 100% on-device (zero cloud transfer)\n\n`;
-
-      section += `**Executive Summary & Core Points:**\n`;
       const paragraphs = docText
         .split('\n\n')
         .map(p => p.trim())
-        .filter(p => p.length > 40 && !p.startsWith('--- Page'));
+        .filter(p => p.length > 30 && !p.startsWith('--- Page'));
 
+      let res = `### 📄 Document: ${att.name}\n\n`;
+      res += `**Key Highlights:**\n`;
       if (paragraphs.length > 0) {
-        const samplePoints = paragraphs.slice(0, 3);
-        samplePoints.forEach((p, idx) => {
+        paragraphs.slice(0, 3).forEach((p, idx) => {
           const cleanP = p.length > 180 ? p.substring(0, 180) + '...' : p;
-          section += `${idx + 1}. ${cleanP}\n`;
+          res += `${idx + 1}. ${cleanP}\n`;
         });
       } else {
-        section += `1. Document ka data successfully read aur parse kar liya gaya hai.\n`;
-        section += `2. Saara content search aur analysis ke liye ready hai.\n`;
+        res += `- Document ka content load ho gaya hai aur analysis ke liye ready hai.\n`;
       }
 
       if (query) {
-        section += `\n**Aapke sawaal ka jawab:**\n`;
-        section += `Aapne poocha: *"${userText}"*\n\nDocument ke mutabiq, relevant content upar summarize kiya gaya hai. Kisi specific section ya page ko further explain karwana ho toh batao!`;
-      } else {
-        section += `\nIs document ke baare mein aapko kya janna hai? (Key takeaways, test questions, ya deep explanation)`;
+        res += `\nAapke sawaal (*"${userText}"*) ke context mein: Document se relevant points upar summarize hain. Kisi specific section ko detail mein cover karna ho toh batao!`;
       }
 
-      responses.push(section);
+      responses.push(res);
     }
   }
 

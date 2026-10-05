@@ -50,7 +50,7 @@ async function extractTextFromPDF(
   file: File,
   onProgress?: (status: string) => void
 ): Promise<{ text: string; pages: number }> {
-  onProgress?.('Reading PDF pages...');
+  onProgress?.('Processing...');
   const arrayBuffer = await file.arrayBuffer();
 
   try {
@@ -72,7 +72,7 @@ async function extractTextFromPDF(
 
     const maxPagesToRead = Math.min(numPages, 30); // prevent freezing on huge 500-page textbooks
     for (let pageNum = 1; pageNum <= maxPagesToRead; pageNum++) {
-      onProgress?.(`Reading PDF page ${pageNum}/${numPages}...`);
+      onProgress?.('Processing...');
       const page = await pdfDoc.getPage(pageNum);
       const textContent = await page.getTextContent();
       const pageText = textContent.items
@@ -130,7 +130,7 @@ async function processImage(
   extractedText?: string;
   dimensions?: { width: number; height: number };
 }> {
-  onProgress?.('Preparing image preview...');
+  onProgress?.('Processing...');
 
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -147,19 +147,16 @@ async function processImage(
     img.src = dataUrl;
   });
 
-  // Try OCR with tesseract.js for text detection (signs, notes, questions, code screenshots)
   let extractedText: string | undefined = undefined;
 
   try {
-    onProgress?.('Scanning image for text (OCR)...');
+    onProgress?.('Processing...');
     const { recognize } = await import('tesseract.js');
     
-    // Set a timeout so OCR never hangs indefinitely
+    // Set a timeout so processing never hangs indefinitely
     const ocrPromise = recognize(dataUrl, 'eng', {
-      logger: (m) => {
-        if (m.status === 'recognizing text' && typeof m.progress === 'number') {
-          onProgress?.(`Scanning image... ${Math.round(m.progress * 100)}%`);
-        }
+      logger: (_m) => {
+        onProgress?.('Processing...');
       },
     });
 
@@ -170,7 +167,7 @@ async function processImage(
       extractedText = result.data.text.trim();
     }
   } catch (err: any) {
-    console.warn('[Samjho] Image OCR notice:', err?.message || err);
+    console.warn('[Samjho] Image text notice:', err?.message || err);
   }
 
   return { dataUrl, extractedText, dimensions };
@@ -193,7 +190,7 @@ export async function processUploadedFile(
     type: file.type || 'application/octet-stream',
     category,
     status: 'reading',
-    statusText: 'Reading file...',
+    statusText: 'Processing...',
   };
 
   try {
@@ -205,9 +202,7 @@ export async function processUploadedFile(
 
       const words = extractedText ? extractedText.split(/\s+/).filter(Boolean).length : 0;
       attachment.wordCount = words;
-      attachment.summary = words > 0
-        ? `Image (${dimensions?.width}×${dimensions?.height}) • ${words} words recognized`
-        : `Image (${dimensions?.width}×${dimensions?.height})`;
+      attachment.summary = 'Image';
       attachment.status = 'ready';
       attachment.statusText = 'Ready';
       return attachment;

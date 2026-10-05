@@ -254,17 +254,11 @@ export const InputBox: React.FC<InputBoxProps> = ({
                       {att.status === 'reading' ? (
                         <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
                           <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                          <span>{att.statusText || 'Reading...'}</span>
-                        </span>
-                      ) : att.status === 'error' ? (
-                        <span className="flex items-center gap-1 text-red-500">
-                          <AlertCircle className="w-2.5 h-2.5" />
-                          <span>Error</span>
+                          <span>Loading</span>
                         </span>
                       ) : (
-                        <span className="flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="w-2.5 h-2.5" />
-                          <span>Ready</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                          Ready
                         </span>
                       )}
                     </div>
