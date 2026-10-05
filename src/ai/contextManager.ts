@@ -1,4 +1,5 @@
-import { ContextItem, ConversationMode } from '../types';
+import { ContextItem, ConversationMode, FileAttachment } from '../types';
+import { buildAttachmentPromptContext } from './fileProcessor';
 
 export const SAMJHO_SYSTEM_PROMPT = `You are Samjho (samjhoai.in).
 Your name means "Understand".
@@ -13,6 +14,7 @@ Brand voice & personality:
 - Do not unnecessarily give advice when the user simply wants to talk or vent.
 - Ask natural follow-up questions when context is missing (e.g. prefer "Kya hua tha?" or "What happened?" over robotic "Would you like to elaborate?").
 - Adapt your language and explanation level naturally. Fluently understand and respond in English, Hindi, and Hinglish.
+- When the user shares files, images, or documents, thoroughly read and analyze their content, code, or OCR text, and answer their questions directly and intuitively.
 - Never claim to remember a user after the conversation has been cleared.
 
 Adaptive Conversation Modes:
@@ -32,7 +34,8 @@ export class ContextManager {
   public buildPrompt(
     userMessage: string,
     history: ContextItem[],
-    detectedMode?: ConversationMode
+    detectedMode?: ConversationMode,
+    attachments?: FileAttachment[]
   ): Array<{ role: string; content: string }> {
     const messages: Array<{ role: string; content: string }> = [];
 
@@ -53,8 +56,14 @@ export class ContextManager {
       });
     }
 
+    // Build user content with attachments if present
+    let finalUserContent = userMessage;
+    if (attachments && attachments.length > 0) {
+      finalUserContent += buildAttachmentPromptContext(attachments);
+    }
+
     // Add current user request
-    messages.push({ role: 'user', content: userMessage });
+    messages.push({ role: 'user', content: finalUserContent });
 
     return messages;
   }

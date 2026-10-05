@@ -1,6 +1,7 @@
-import { ChatMessage, ConversationMode } from '../types';
+import { ChatMessage, ConversationMode, FileAttachment } from '../types';
 import { inferenceEngine } from './inferenceEngine';
 import { sessionManager } from '../privacy/sessionManager';
+import { buildAttachmentPromptContext } from './fileProcessor';
 
 export class ResponseController {
   private isGenerating = false;
@@ -14,18 +15,31 @@ export class ResponseController {
    */
   public async handleUserMessage(
     text: string,
-    onProgress: (partialMessage: ChatMessage) => void
+    arg2?: ((partialMessage: ChatMessage) => void) | FileAttachment[],
+    arg3?: (partialMessage: ChatMessage) => void
   ): Promise<ChatMessage> {
+    let attachments: FileAttachment[] | undefined;
+    let onProgress: ((partialMessage: ChatMessage) => void) | undefined;
+
+    if (typeof arg2 === 'function') {
+      onProgress = arg2;
+      attachments = undefined;
+    } else {
+      attachments = arg2;
+      onProgress = arg3;
+    }
+
     if (this.isGenerating) {
       inferenceEngine.abortGeneration();
     }
 
     this.isGenerating = true;
 
-    // Record user message in ephemeral session memory
+    // Record user message with attachments in ephemeral session memory
+    const contextContent = text + (attachments && attachments.length > 0 ? buildAttachmentPromptContext(attachments) : '');
     sessionManager.addContext({
       role: 'user',
-      content: text,
+      content: contextContent,
       timestamp: Date.now(),
     });
 
@@ -44,8 +58,9 @@ export class ResponseController {
         text,
         (_chunk, fullText) => {
           assistantMessage.text = fullText;
-          onProgress({ ...assistantMessage });
-        }
+          onProgress?.({ ...assistantMessage });
+        },
+        attachments
       );
 
       assistantMessage.text = result.text;
@@ -53,7 +68,7 @@ export class ResponseController {
       assistantMessage.isStreaming = false;
 
       // Push final completed state to UI
-      onProgress({ ...assistantMessage });
+      onProgress?.({ ...assistantMessage });
 
       // Add to session context
       sessionManager.addContext({
@@ -69,7 +84,7 @@ export class ResponseController {
       assistantMessage.text = 'Something went wrong. Please try again.';
       assistantMessage.isError = true;
       assistantMessage.isStreaming = false;
-      onProgress({ ...assistantMessage });
+      onProgress?.({ ...assistantMessage });
       return assistantMessage;
     }
   }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChatMessage, ModelLoadingState } from '../types';
+import { ChatMessage, ModelLoadingState, FileAttachment } from '../types';
 import { MessageBubble } from './MessageBubble';
 import { InputBox } from './InputBox';
 import { PrivacyBadge } from './PrivacyBadge';
@@ -108,19 +108,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async (text: string) => {
+  const handleSendMessage = async (text: string, attachments?: FileAttachment[]) => {
     const userMsg: ChatMessage = {
       id: 'user-' + Date.now(),
       sender: 'user',
       text,
       timestamp: Date.now(),
+      attachments,
     };
 
     setMessages((prev) => [...prev, userMsg]);
     setIsGenerating(true);
 
     try {
-      await responseController.handleUserMessage(text, (partialMsg) => {
+      await responseController.handleUserMessage(text, attachments, (partialMsg) => {
         setMessages((prev) => {
           const index = prev.findIndex((m) => m.id === partialMsg.id);
           if (index >= 0) {
@@ -157,18 +158,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
     setIsGenerating(true);
     try {
-      await responseController.handleUserMessage(lastUserMessage.text, (partialMsg) => {
-        setMessages((prev) => {
-          const index = prev.findIndex((m) => m.id === partialMsg.id);
-          if (index >= 0) {
-            const next = [...prev];
-            next[index] = partialMsg;
-            return next;
-          } else {
-            return [...prev, partialMsg];
-          }
-        });
-      });
+      await responseController.handleUserMessage(
+        lastUserMessage.text,
+        lastUserMessage.attachments,
+        (partialMsg) => {
+          setMessages((prev) => {
+            const index = prev.findIndex((m) => m.id === partialMsg.id);
+            if (index >= 0) {
+              const next = [...prev];
+              next[index] = partialMsg;
+              return next;
+            } else {
+              return [...prev, partialMsg];
+            }
+          });
+        }
+      );
     } finally {
       setIsGenerating(false);
     }

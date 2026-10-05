@@ -7,6 +7,25 @@ export interface HelplineInfo {
   timing: string;
 }
 
+export type FileCategory = 'image' | 'pdf' | 'code' | 'document' | 'other';
+
+export interface FileAttachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  category: FileCategory;
+  dataUrl?: string;
+  extractedText?: string;
+  summary?: string;
+  lineCount?: number;
+  wordCount?: number;
+  imageDimensions?: { width: number; height: number };
+  status: 'reading' | 'ready' | 'error';
+  statusText?: string;
+  error?: string;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'samjho' | 'system';
@@ -16,6 +35,7 @@ export interface ChatMessage {
   isStreaming?: boolean;
   isError?: boolean;
   helplines?: HelplineInfo[];
+  attachments?: FileAttachment[];
 }
 
 export type DeviceTier = 'high' | 'medium' | 'low' | 'unsupported';
