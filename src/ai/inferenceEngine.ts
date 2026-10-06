@@ -569,19 +569,11 @@ Agar share karna chaho toh batao — main sun raha hoon. Aur agar ghar waalon se
   }
 
   if ((lower.includes('exam') || lower.includes('physics') || lower.includes('test')) && (lower.includes('ghar') || lower.includes('anxiety') || lower.includes('yaad nahi') || lower.includes('stress') || lower.includes('tension'))) {
-    return `Dono cheezein ek saath chal rahi hain — exam ka pressure aur personal stress — isliye focus karna aur mushkil lag raha hoga.
+    return `Yaar, dono cheezein ek saath chal rahi hain — exam ka pressure aur upar se personal stress — toh obviously focus karna mushkil lagega. Ye bilkul natural hai.
 
-"Kuch yaad nahi ho raha" wali feeling actually panic create karti hai, aur panic further memory ko block karta hai. Ye cycle hai, par todne layak hai.
+"Kuch yaad nahi ho raha" wali feeling actually panic se aati hai, aur panic memory ko aur block karta hai. Ye ek cycle hai, par todne layak hai.
 
-**Chalo ek plan banate hain:**
-
-1. **Pehle 5 minute:** Ek deep breath lo. Seriously — 4 second inhale, 7 second hold, 8 second exhale. Ye nervous system ko calm karta hai.
-
-2. **Fir next 10 minute:** Sirf ek topic lo — jo sabse zyada weightage rakhta ho. Uss ek topic ke key formulas ya points likh do paper par.
-
-3. **Mann halka karna hai?** Agar pehle ghar ya personal baat share karni ho toh bolo — kabhi kabhi mann halka hone se padhai mein focus aata hai.
-
-Kya karna chahoge — pehle thoda baat karein ya direct topic breakdown karein?`;
+Abhi sabse pehle — kya mann halka karna chahte ho pehle baat karke, ya seedha padhai pe focus karna hai? Dono theek hai, tumhari pace.`;
   }
 
   if (lower.includes('akela') || lower.includes('lonely') || lower.includes('alone') || lower.includes('koi nahi')) {
@@ -638,86 +630,38 @@ Kya tum specific courses batana chahoge? Main comparison aur trade-offs detail m
       .trim();
     
     if (topic.length > 2) {
-      return `**${topic}** ke baare mein:
-
-Main is topic ko detail mein samjha sakta hoon. Batao:
-
-1. **Basic understanding** chahiye (intuitive explanation)? 
-2. **Exam-level detail** chahiye (definitions, formulas, key points)?
-3. **Real-world examples** ke saath samjhna hai?
-4. Ya koi **specific doubt** hai is topic mein?
-
-Jitna specific puchoge, utna better aur focused answer mil payega.`;
+      return `**${topic}** — accha topic hai! Kis level pe samjhna chahte ho — bas ek simple idea chahiye, ya exam-level depth mein jaana hai? Thoda context do toh main bilkul targeted answer de paunga.`;
     }
   }
 
   if (lower.includes('how to') || lower.includes('kaise')) {
-    return `Accha sawaal hai!
-
-Is topic ko properly cover karne ke liye, thoda context chahiye:
-
-- **Kya level** par samjhna chahte ho — beginner, intermediate, ya advanced?
-- Koi **specific situation** hai jisme apply karna hai?
-- **Step-by-step guide** chahiye ya concept level understanding?
-
-Thoda aur batao taaki main targeted answer de sakun — generic answers se zyada kaam nahi banta.`;
+    return `Accha sawaal hai! Thoda aur batao — kis context mein karna hai ye? Jitna specific bataaoge, utna better help kar paunga. Generic answer dene se koi fayda nahi hota na.`;
   }
 
   // ─── BHAI MUJHE SAMAJH NAHI AA RAHA ────────────────────────
   if (lower.includes('samajh nahi aa raha') || lower.includes('samajh nahi ata') || lower.includes('confusing') || lower.includes('confused ho') || lower.includes('understand nahi')) {
-    return `Koi tension nahi — samajhna ek process hai, ek baar mein na samajh aaye toh bhi normal hai.
-
-Batao:
-1. **Kaunsa topic ya problem** hai?
-2. **Kahan tak samajh aaya** aur kahan pe atka?
-3. Chahe Physics ka numerical ho, code ka bug ho, ya koi concept — copy paste kar do ya likh do.
-
-Hum isko step-by-step tod ke simple bana denge. No rush.`;
+    return `Koi baat nahi — samajhna ek process hai, ek baar mein na aaye toh bilkul normal hai. Batao kaunsa topic ya problem hai aur kahan pe atke ho? Hum isko milke simple bana denge, no rush.`;
   }
 
   // ─── MODE-SPECIFIC NUANCED HANDLING ────────────────────────
   if (mode === 'listen') {
-    return `Main sun raha hoon.
-
-Aise din aate hain jab sab kuch thoda bhari ya confusing lagta hai — aur kabhi kabhi kisi ko samjhana bhi exhausting ho jata hai.
-
-Tumhe yahan kisi formal tareeke se baat karne ki zaroorat nahi hai. Jo bhi mann mein chal raha ho — bina kisi filter ke bol sakte ho. Main judge nahi karunga.
+    return `Main sun raha hoon. Aise din aate hain jab sab kuch thoda bhari lagta hai — yahan koi formality nahi hai, jo mann mein ho bina filter ke bol sakte ho.
 
 Kya hua aaj?`;
   }
 
   if (mode === 'think') {
-    return `Ye decision/situation kaafi important lagti hai, aur blindly jump karna risky hoga. Aao step by step sochte hain:
-
-1. **Current situation:** Exactly kya chal raha hai abhi? Main reason kya hai jo ye thought trigger kar raha hai?
-2. **Options:** Agar change karte ho toh path kaisa dikhta hai, aur agar nahi karte toh?
-3. **Trade-offs:** Har option ke saath kya sacrifice aayega aur kya milega?
-4. **Timeline:** Kya ye decision abhi lena zaroori hai, ya thoda time hai sochne ke liye?
-
-Sabse pehle batao — tumhare dimaag mein sabse bada doubt ya darr kya hai is baare mein?`;
+    return `Ye kaafi important decision lagta hai — blindly jump karna sahi nahi hoga. Sabse pehle batao, tumhare dimaag mein sabse bada doubt ya darr kya hai is baare mein? Wahan se hum milke sochte hain.`;
   }
 
   if (mode === 'explain') {
-    return `Chaliye is concept ko step-by-step simple tareeqe se samjhte hain:
-
-**Approach:**
-1. Pehle ek simple analogy se core idea samjhenge
-2. Fir technical details — definitions, formulas
-3. Last mein key takeaways aur exam tips
-
-Batao exactly kaunsa concept hai aur kis level par chahiye — school level, college level, ya just intuitive understanding? Jitna specific bataaoge, utna better samjha paunga.`;
+    return `Bilkul, samjhate hain! Batao kaunsa concept hai aur kitni depth chahiye — bas idea level ya exam-ready? Fir main simple analogy se shuru karke step-by-step le chalta hoon.`;
   }
 
   if (mode === 'mixed') {
-    return `Main dekh sakta hoon ki do cheezein simultaneously chal rahi hain — ek practical problem aur ek personal/emotional layer.
+    return `Lag raha hai do cheezein ek saath chal rahi hain — ek practical problem aur upar se personal stress bhi. Dono valid hain.
 
-Dono valid hain aur dono ko address karna zaroori hai. Par ek baar mein sab solve karna overwhelming ho sakta hai.
-
-**Hum do approaches le sakte hain:**
-1. Pehle mann halka karo — jo personal baat chal rahi hai woh share karo, taaki mental space free ho
-2. Ya fir pehle practical problem tackle karo — kabhi kabhi ek problem solve hone se confidence aata hai
-
-Tum kahan se start karna chahoge?`;
+Kya pehle mann halka karna chahte ho baat karke, ya seedha problem tackle karein? Jo comfortable lage wahan se shuru karte hain.`;
   }
 
   // ─── DEFAULT ADAPTIVE RESPONSE ─────────────────────────────
@@ -729,13 +673,7 @@ Chahe koi concept samjhna ho, code debug karna ho, ya bas baat karni ho — thod
   }
 
   // Meaningful general response for unmatched but substantive queries
-  return `Maine tumhari baat samjhi. Is topic ko properly cover karne ke liye:
-
-1. **Agar ye koi concept ya topic hai** — batao kya level chahiye (basic, detailed, ya exam-focused) aur main step-by-step samjhaunga.
-2. **Agar koi problem solve karni hai** — share karo details aur hum saath mein kaam karenge.
-3. **Agar koi thought ya feeling discuss karni hai** — openly bolo, yahan koi judgment nahi hai.
-
-Main tumhare saath hoon — bolo kaise aage badhein?`;
+  return `Hmm, samjha. Thoda aur detail doge toh zyada acchi help kar paunga — koi concept samjhna hai, kuch solve karna hai, ya bas baat karni hai? Jo bhi ho, bolo — main yahan hoon.`;
 }
 
 export class InferenceEngine {
