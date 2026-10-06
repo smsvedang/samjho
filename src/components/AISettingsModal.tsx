@@ -75,7 +75,53 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
 
         {/* Engine Selection Cards */}
         <div className="mt-4 space-y-3">
-          {/* 1. Groq (Recommended) */}
+          {/* 1. Smart Local Companion (Top & Recommended for Privacy) */}
+          <label
+            className={`block p-3.5 rounded-2xl border transition-all cursor-pointer ${
+              settings.provider === 'local-companion'
+                ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30 shadow-xs'
+                : 'border-neutral-200 dark:border-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-700 bg-neutral-50/40 dark:bg-neutral-900/30'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <input
+                type="radio"
+                name="engineProvider"
+                checked={settings.provider === 'local-companion'}
+                onChange={() => setSettings(prev => ({ ...prev, provider: 'local-companion' }))}
+                className="mt-1 accent-emerald-600 cursor-pointer"
+              />
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="w-4 h-4 text-emerald-500" />
+                    <span className="font-semibold text-sm text-neutral-900 dark:text-neutral-100">
+                      Smart Local Companion (Default)
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                    🛡️ 100% Offline & Private
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+                  <strong>Zero data leaves your device.</strong> Completely private, anonymous, and works without sending any chat data over the internet.
+                </p>
+              </div>
+            </div>
+          </label>
+
+          {/* Section Divider: Optional Cloud APIs */}
+          <div className="pt-2 pb-1">
+            <div className="flex items-center gap-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+              <span>Optional Cloud Power (Third-Party APIs)</span>
+              <div className="flex-1 h-px bg-neutral-200 dark:border-neutral-800" />
+            </div>
+            <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">
+              Note: Using external APIs sends your prompts directly to that provider for GPU processing.
+            </p>
+          </div>
+
+          {/* 2. Groq (Llama 3.3 70B) */}
           <label
             className={`block p-3.5 rounded-2xl border transition-all cursor-pointer ${
               settings.provider === 'groq'
@@ -99,12 +145,12 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                       Groq API (Llama 3.3 70B)
                     </span>
                   </div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                    Ultra Fast & Free
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                    Ultra Fast LLM
                   </span>
                 </div>
                 <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-                  Unmatched ~500 tokens/sec speed. Brilliant at reasoning, Hinglish, emotional depth, coding & math doubts.
+                  Extreme ~500 tokens/sec speed. Best for complex reasoning, long code debugging, and essays.
                 </p>
 
                 {settings.provider === 'groq' && (
@@ -130,7 +176,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                       className="w-full px-3 py-2 text-xs rounded-xl bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 focus:outline-hidden focus:ring-2 focus:ring-samjho-500 font-mono"
                     />
                     <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                      Free tier provides plenty of requests per minute at zero cost.
+                      Calls Groq directly from your browser with your private key.
                     </p>
                   </div>
                 )}
@@ -138,7 +184,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
             </div>
           </label>
 
-          {/* 2. Google Gemini */}
+          {/* 3. Google Gemini */}
           <label
             className={`block p-3.5 rounded-2xl border transition-all cursor-pointer ${
               settings.provider === 'gemini'
@@ -167,7 +213,7 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-                  Google's latest lightweight multimodal model. Exceptional at nuances and Indian languages.
+                  Google's latest multimodal model. Calls Google Generative Language API directly.
                 </p>
 
                 {settings.provider === 'gemini' && (
@@ -194,41 +240,6 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
                     />
                   </div>
                 )}
-              </div>
-            </div>
-          </label>
-
-          {/* 3. Local Companion (100% Offline) */}
-          <label
-            className={`block p-3.5 rounded-2xl border transition-all cursor-pointer ${
-              settings.provider === 'local-companion'
-                ? 'border-samjho-500 bg-samjho-50/50 dark:bg-samjho-950/30 shadow-xs'
-                : 'border-neutral-200 dark:border-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-700 bg-neutral-50/40 dark:bg-neutral-900/30'
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <input
-                type="radio"
-                name="engineProvider"
-                checked={settings.provider === 'local-companion'}
-                onChange={() => setSettings(prev => ({ ...prev, provider: 'local-companion' }))}
-                className="mt-1 accent-samjho-600 cursor-pointer"
-              />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Cpu className="w-4 h-4 text-emerald-500" />
-                    <span className="font-semibold text-sm text-neutral-900 dark:text-neutral-100">
-                      Smart Local Companion
-                    </span>
-                  </div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                    100% On-Device
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-                  Runs directly in your browser. Zero setup, zero keys, zero network tracking. Solves future anxiety, mid-sem panic, physics, math, and coding doubts locally.
-                </p>
               </div>
             </div>
           </label>
@@ -286,11 +297,17 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
         </div>
 
         {/* Privacy Promise Notice */}
-        <div className="mt-4 p-3 rounded-2xl bg-neutral-100/70 dark:bg-neutral-850/60 border border-neutral-200/50 dark:border-neutral-800 flex items-start gap-2.5 text-xs text-neutral-600 dark:text-neutral-400">
-          <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-          <span>
-            <strong>Zero-Leak Privacy:</strong> All API keys are stored only inside your browser’s local storage. They are never sent to any Samjho server.
-          </span>
+        <div className="mt-4 p-3.5 rounded-2xl bg-neutral-100/70 dark:bg-neutral-850/60 border border-neutral-200/50 dark:border-neutral-800 space-y-2 text-xs text-neutral-600 dark:text-neutral-400">
+          <div className="flex items-center gap-2 font-semibold text-neutral-800 dark:text-neutral-200">
+            <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>Privacy & Anonymity Summary</span>
+          </div>
+          <p className="leading-relaxed">
+            • <strong>Smart Local Companion:</strong> 100% On-Device. Zero network calls. Works completely offline in Airplane mode. Total anonymity.
+          </p>
+          <p className="leading-relaxed">
+            • <strong>Cloud APIs (Groq / Gemini / OpenAI):</strong> Prompts are sent encrypted directly from your browser to that specific AI company. Samjho has no middleman server and stores zero data.
+          </p>
         </div>
 
         {/* Actions */}
