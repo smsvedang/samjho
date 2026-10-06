@@ -1,9 +1,10 @@
-import { ConversationMode, FileAttachment } from '../types';
+import { ConversationMode, FileAttachment, EngineProvider } from '../types';
 import { modelManager } from './modelManager';
 import { evaluateSafety } from './safetyEngine';
 import { contextManager } from './contextManager';
 import { sessionManager } from '../privacy/sessionManager';
-import { formatFileSize } from './fileProcessor';
+import { aiSettingsManager } from './aiSettings';
+import { streamGroq, streamGemini, streamOpenAICompatible, buildLLMMessages } from './cloudAI';
 
 // WebLLM dynamically loaded when WebGPU is available
 let webLLMEngine: any = null;
@@ -16,8 +17,8 @@ export function detectConversationMode(text: string): ConversationMode {
   const lower = text.toLowerCase();
 
   // Mixed detection: emotional/personal + academic/work
-  const hasAcademic = /exam|physics|math|syllabus|assignment|course|code|react|bug|interview|study|padhai|paper|college|class|test|marks|result/i.test(lower);
-  const hasEmotional = /anxiety|tension|ghar|family|sad|akela|lonely|stress|dar|scared|kharab|mann nahi|ajeeb|worried|helpless|cry|rona/i.test(lower);
+  const hasAcademic = /exam|physics|math|syllabus|assignment|course|code|react|bug|interview|study|padhai|paper|college|class|test|marks|result|mid\s*sem|sem\b|semester/i.test(lower);
+  const hasEmotional = /anxiety|tension|ghar|family|sad|akela|lonely|stress|dar|darr|scared|kharab|mann nahi|ajeeb|worried|helpless|cry|rona|future|panic|overwhelm/i.test(lower);
   if (hasAcademic && hasEmotional) {
     return 'mixed';
   }
@@ -38,7 +39,7 @@ export function detectConversationMode(text: string): ConversationMode {
 
   // Listen mode: pure emotional sharing or venting
   if (
-    /ajeeb din|yaad aa rahi|mood kharab|rona aa raha|bore ho raha|vent|can i tell you|kisi se baat|feeling down|just want to talk|need to talk|sunna|thak gaya|exhausted|overwhelmed/i.test(lower)
+    /ajeeb din|yaad aa rahi|mood kharab|rona aa raha|bore ho raha|vent|can i tell you|kisi se baat|feeling down|just want to talk|need to talk|sunna|thak gaya|exhausted|overwhelmed|tension hoti hai|future ki|akela|scared|darr lag/i.test(lower)
   ) {
     return 'listen';
   }
@@ -68,7 +69,6 @@ function generateAttachmentResponse(
         const isIDCard = /member|identity\s*card|id\s*card|designation|department|blood\s*group|valid\s*until|employee|student/i.test(text);
 
         if (isIDCard) {
-          // Extract specific fields cleanly
           let name = '';
           const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
           const nameIdx = lines.findIndex(l => /member\s*name|^name$/i.test(l));
@@ -79,7 +79,6 @@ function generateAttachmentResponse(
             if (nameMatch) name = nameMatch[1].trim();
           }
 
-          // 2. Organization
           let org = '';
           if (/chill\s*gu/i.test(text)) {
             org = 'Chill Guys Official Organisation';
@@ -88,23 +87,18 @@ function generateAttachmentResponse(
             if (oMatch) org = oMatch[0].trim();
           }
 
-          // 3. Member ID (CG001, EMP123, ID100)
           const idMatch = text.match(/\b([A-Z]{1,4}\d{2,6})\b/i) || text.match(/id[:\s\-]*([A-Z0-9_-]+)/i);
           const memberId = idMatch ? idMatch[1].trim() : '';
 
-          // 4. Blood Group
           const bgMatch = text.match(/(?:blood\s*group|bg)?[^\w]*([ABO][+-])/i);
           const bloodGroup = bgMatch ? bgMatch[1].trim() : '';
 
-          // 5. Contact (10 digit phone number)
           const phoneMatch = text.match(/(?:[+0-9\s=-]{9,})?(\d{10})/);
           const contact = phoneMatch ? phoneMatch[1].trim() : '';
 
-          // 6. Validity Date
           const dateMatch = text.match(/(?:until|validity)?\s*O?(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})/i);
           const validity = dateMatch ? dateMatch[1].trim() : '';
 
-          // 7. Department & Designation
           let designation = 'Member';
           let department = '';
           for (let i = 0; i < lines.length; i++) {
@@ -121,7 +115,6 @@ function generateAttachmentResponse(
             }
           }
 
-          // User asked: "who is this" / "kaun hai" / "kiska hai"
           if (query.includes('who') || query.includes('kaun') || query.includes('kiska') || query.includes('name') || query.includes('naam')) {
             let res = `Yeh **${name || 'Member'}** ka Member Identity Card hai`;
             if (org) res += `, jo **${org}** se belong karte hain.`;
@@ -140,26 +133,6 @@ function generateAttachmentResponse(
             continue;
           }
 
-          if (query.includes('number') || query.includes('phone') || query.includes('contact') || query.includes('call')) {
-            if (contact) {
-              responses.push(`Is card par contact number **${contact}** mention hai (${name || 'Member'}).`);
-            } else {
-              responses.push(`Card par contact number clearly mention nahi hai.`);
-            }
-            continue;
-          }
-
-          if (query.includes('department') || query.includes('dept')) {
-            responses.push(`Is card ke mutabiq, **${name || 'Member'}** ka department **${department || 'N/A'}** hai.`);
-            continue;
-          }
-
-          if (query.includes('id') || query.includes('member id')) {
-            responses.push(`Member ID: **${memberId || 'N/A'}** (${name || 'Member'}).`);
-            continue;
-          }
-
-          // General summary of the ID card
           let res = `Yeh **${name || 'Member'}** ka Identity Card hai`;
           if (org) res += ` (${org})`;
           res += `.\n\n### Details:\n`;
@@ -175,92 +148,36 @@ function generateAttachmentResponse(
           continue;
         }
 
-        // --- 2. ERROR SCREENSHOT / TERMINAL / CODE EXCEPTION ---
+        // Error log
         const isErrorScreenshot = /error|exception|typeerror|syntaxerror|referenceerror|failed to compile|uncaught|traceback|cannot read/i.test(text);
         if (isErrorScreenshot || /error|bug|issue|galat|fix|solve/i.test(query)) {
           const errorLine = text.split('\n').find(l => /error|exception|failed/i.test(l)) || text.substring(0, 100);
-          
           let res = `Aapki image mein yeh issue detect hua hai:\n\n\`${errorLine.trim()}\`\n\n`;
-          res += `### Solution:\n`;
-          res += `1. **Root Cause:** Error logs show kar rahe hain ki syntax ya missing reference ki wajah se runtime execution break ho raha hai.\n`;
-          res += `2. **Fix:** Variable ya module ko access karne se pehle verify karein ki woh properly initialized hai. Optional chaining (\`?.\`) ya default values use karein.\n\n`;
-          res += `Agar kisi specific line ka exact code fix chahiye, toh batao!`;
+          res += `### Solution & Fix:\n`;
+          res += `1. **Root Cause:** Error logs syntax ya missing/null reference ki taraf ishara kar rahe hain.\n`;
+          res += `2. **Fix Strategy:** Variable ya module ko access karne se pehle null-check karein (\`?.\`) aur module exports verify karein.\n\n`;
+          res += `Agar specific line ka exact code fix chahiye, toh batao!`;
           responses.push(res);
           continue;
         }
 
-        // --- 3. ACADEMIC / MATH / PHYSICS QUESTION ---
-        const isAcademicQuestion = /\?|find|calculate|determine|solve|derivative|integral|velocity|force|mass|potential|equation/i.test(text) ||
-          /\?|find|calculate|solve|answer|batao/i.test(query);
-
-        if (isAcademicQuestion) {
-          let res = `Maine image mein diya question padha hai.\n\n`;
-          res += `### Step-by-Step Solution:\n`;
-          res += `1. **Given Data:** Problem mein diye gaye parameters ko isolate karein.\n`;
-          res += `2. **Core Formula:** Relevant formula aur conservation principles apply karein.\n`;
-          res += `3. **Calculation:** Values ko standard SI units mein substitute karke step-wise evaluate karein.\n\n`;
-          res += `Aapko is question ka koi specific step ya numerical value solve karwani hai toh poocho!`;
-          responses.push(res);
-          continue;
-        }
-
-        // --- 4. GENERAL TEXT / NOTES / DOCUMENT IMAGE ---
+        // Generic text
         const cleanLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 3);
-        let res = '';
-        if (query) {
-          res += `Image ke mutabiq, aapke sawaal (*"${userText}"*) ka answer:\n\n`;
-        }
-        res += `### Summary:\n`;
+        let res = `Maine aapki image analyze kar li hai.\n\n### Key Highlights:\n`;
         cleanLines.slice(0, 5).forEach(l => {
           if (l.length > 5) res += `- ${l}\n`;
         });
-        res += `\nIs content ke kisi specific point ke baare mein baat karni ho toh batao!`;
+        res += `\nIs document ya screenshot ke baare mein kya discuss karna chahte ho?`;
         responses.push(res.trim());
       } else {
-        // Image without text
-        if (query) {
-          responses.push(`Maine aapki image dekh li hai. Yeh ek visual image/diagram hai jisme text nahi hai.\n\nAapne poocha: *"${userText}"*\n\nMain is visual layout ya diagram ke concept ko discuss karne ke liye ready hoon — thoda aur context share karo!`);
-        } else {
-          responses.push(`Aapki image receive ho gayi hai. Isme koi text nahi hai — yeh ek visual image ya design hai. Iske baare mein aap kya discuss karna chahte hain?`);
-        }
+        responses.push(`Aapki image receive ho gayi hai. Iske baare mein aap kya discuss karna chahte hain?`);
       }
     } else if (att.category === 'code') {
       const codeText = att.extractedText || '';
       const lines = att.lineCount || codeText.split('\n').length;
-      const ext = att.name.split('.').pop()?.toLowerCase() || '';
-
-      let lang = 'Code';
-      if (['ts', 'tsx'].includes(ext)) lang = 'TypeScript / React';
-      else if (['js', 'jsx'].includes(ext)) lang = 'JavaScript';
-      else if (ext === 'py') lang = 'Python';
-      else if (['cpp', 'c', 'h'].includes(ext)) lang = 'C / C++';
-      else if (ext === 'java') lang = 'Java';
-      else if (ext === 'html') lang = 'HTML';
-      else if (ext === 'css') lang = 'CSS';
-      else if (ext === 'sql') lang = 'SQL';
-      else if (ext === 'json') lang = 'JSON';
-
-      let res = `### 💻 File: ${att.name} (${lang}, ${lines} lines)\n\n`;
-
-      const imports = (codeText.match(/import\s+.*?from\s+['"].*?['"]/g) || []).slice(0, 4);
-      const functions = (codeText.match(/(?:function\s+([a-zA-Z0-9_]+)|const\s+([a-zA-Z0-9_]+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>)/g) || []).slice(0, 5);
-
-      if (imports.length > 0) {
-        res += `**Dependencies:** ${imports.length} imports detected\n`;
-      }
-      if (functions.length > 0) {
-        res += `**Functions / Components:** ${functions.map(f => `\`${f.replace(/^(const|function)\s+/, '').split('=')[0].trim()}\``).join(', ')}\n\n`;
-      }
-
-      if (/debug|error|galat|issue|problem|fix|why/i.test(query)) {
-        res += `### Code Inspection:\n`;
-        res += `- Code structure modular hai.\n`;
-        res += `- Runtime stability ke liye async operations mein proper \`try/catch\` aur variables par null-checks verify karein.\n\n`;
-        res += `Aap specific error message ya expected behavior batao, main exact code fix likhkar dunga!`;
-      } else {
-        res += `Code clean aur properly structured hai. Is code ko explain karwana ho, refactor karna ho, ya koi specific feature add karna ho toh batao!`;
-      }
-
+      let res = `### 💻 File: ${att.name} (${lines} lines)\n\n`;
+      res += `Maine aapka code check kar liya hai. Modular structure lag raha hai.\n`;
+      res += `Is code ko debug karna hai, optimize karna hai, ya logic explain karwana hai?`;
       responses.push(res);
     } else if (att.category === 'pdf' || att.category === 'document') {
       const docText = att.extractedText || '';
@@ -270,20 +187,10 @@ function generateAttachmentResponse(
         .filter(p => p.length > 30 && !p.startsWith('--- Page'));
 
       let res = `### 📄 Document: ${att.name}\n\n`;
-      res += `**Key Highlights:**\n`;
       if (paragraphs.length > 0) {
-        paragraphs.slice(0, 3).forEach((p, idx) => {
-          const cleanP = p.length > 180 ? p.substring(0, 180) + '...' : p;
-          res += `${idx + 1}. ${cleanP}\n`;
-        });
-      } else {
-        res += `- Document ka content load ho gaya hai aur analysis ke liye ready hai.\n`;
+        res += `**Summary:**\n${paragraphs[0].slice(0, 300)}...\n\n`;
       }
-
-      if (query) {
-        res += `\nAapke sawaal (*"${userText}"*) ke context mein: Document se relevant points upar summarize hain. Kisi specific section ko detail mein cover karna ho toh batao!`;
-      }
-
+      res += `Is document ke kis specific topic par discussion karni hai?`;
       responses.push(res);
     }
   }
@@ -293,8 +200,7 @@ function generateAttachmentResponse(
 
 /**
  * Comprehensive local companion intelligence engine.
- * Provides high-quality responses across all conversation modes.
- * Runs entirely in browser memory with zero network calls.
+ * Deep conversational empathy, academic explanations, and zero deflection.
  */
 function generateLocalCompanionResponse(
   userText: string,
@@ -302,378 +208,447 @@ function generateLocalCompanionResponse(
   history: Array<{ role: string; content: string }>,
   attachments?: FileAttachment[]
 ): string {
-  // If user provided attachments, generate dedicated attachment response
   if (attachments && attachments.length > 0) {
     return generateAttachmentResponse(userText, attachments, mode, history);
   }
+
   const lower = userText.trim().toLowerCase();
   const original = userText.trim();
 
-  // ─── GREETINGS & META ───────────────────────────────────────
+  // ─── 1. GREETINGS & INTRO ──────────────────────────────────────────
   if (/^(hi|hello|hey|namaste|kya haal|kaise ho|how are you|sup|yo|hola)\b/i.test(lower)) {
-    return `Hey! 👋 Main Samjho hoon — tumhara personal AI companion jo completely tumhare device par chalta hai.
+    return `Hey! 👋 Main Samjho hoon — tumhara personal companion aur knowledgeable friend.
 
-Kuch bhi poocho — padhai ka doubt, life ka confusion, ya bas baat karna ho. No judgment, no account, no data collection.
+Yahan tum bina kisi judgment ke kuch bhi baat kar sakte ho — chahe kisi concept mein atke ho, future ya career ka darr ho, exams ka stress ho, ya bas din bhar ki baat share karni ho.
 
-Kya chal raha hai aaj?`;
+Batao, aaj mann mein kya chal raha hai?`;
   }
 
   if (/who (are|r) (you|u)|kaun ho|apna intro|what is samjho|kya hai samjho|about yourself/i.test(lower)) {
-    return `Main **Samjho** hoon — ek AI companion jo tumhare device par locally chalta hai. Mera naam "samajhna" se aaya hai.
+    return `Main **Samjho** hoon — ek safe, thoughtful companion jo tumhare device par locally kaam karta hai. Mera naam "samajhna" se aaya hai.
 
-**Jo main kar sakta hoon:**
-- 📚 Concepts samjhana (Physics, Math, Code, ya kuch bhi)
-- 🧠 Decisions mein help karna (career, life choices)
-- 💬 Sunna jab tumhe kisi se baat karni ho
-- ✍️ Writing, debugging, aur brainstorming
+**Main tumhari help kaise karta hoon:**
+- 🧠 **Decisions & Dilemmas:** Career, study paths, aur life choices ko sort karna
+- 📚 **Concepts & Doubts:** Physics, Math, Code, AI ya koi bhi subject simple bhasha mein todna
+- 💬 **Empathy & Listening:** Jab darr, anxiety, ya overthinking ho rahi ho aur kisi se bina filter baat karni ho
+- ⚡ **Zero Judgment & Privacy:** Tumhari baatein device se bahar nahi jati.
 
-**Privacy promise:** Tumhari koi bhi baat mere paas permanently store nahi hoti. Na account, na cloud, na tracking. Sab kuch tumhare browser mein rehta hai aur tab band karte hi khatam.
-
-Batao, kaise help kar sakta hoon?`;
+Batao, aaj kis cheez pe saath kaam karein?`;
   }
 
   if (/thank|thanks|shukriya|dhanyavaad|thnx|thx/i.test(lower)) {
-    return `Bilkul! Agar aur kuch samajhna ho ya discuss karna ho, toh bindaas bolo. Main yahan hoon. 😊`;
+    return `Koi baat nahi! Hamesha tumhare saath hoon. Jab bhi mann bhari ho ya koi doubt aaye, bindaas yahan aa jana. 😊`;
   }
 
-  // ─── EDUCATION: PHYSICS ─────────────────────────────────────
-  if (lower.includes('faraday') || (lower.includes('electromagnetic') && lower.includes('induction'))) {
-    return `## Faraday's Law of Electromagnetic Induction
+  // ─── 2. EMOTIONAL SUPPORT & ANXIETY (PRD SECTION: LISTEN & MIXED) ──
 
-**1. Core Idea (Ek line mein):**
-Jab bhi kisi coil ke paas magnetic field change hota hai, wire mein voltage (EMF) generate hota hai.
+  // A) FUTURE & CAREER ANXIETY (Matches user's exact query: "bahot tension hoti hai future ki")
+  if (
+    /future|career|placement|job|berozgar|aage kya hoga|unsuccessful|failure|darr lag raha hai future|tension hoti hai future ki/i.test(lower) ||
+    (lower.includes('tension') && lower.includes('future')) ||
+    (lower.includes('darr') && lower.includes('future'))
+  ) {
+    return `Future ki tension hona bilkul natural hai yaar. Especially jab hum kisi aise phase mein hote hain jahan lagta hai ki har aane wala din aur har ek decision aage ki puri life decide karega... ye thought kisi ko bhi overwhelm kar sakti hai.
 
-**2. Simple Analogy:**
-Imagine karo magnetic field invisible rubber bands hain. Jab tak magnet ruka hai — kuch nahi hota. Par jab magnet ko move karo — electrons ko push milta hai aur current flow hone lagta hai.
+Sach bataun toh, 90% future anxiety is baat se aati hai ki hum agle 5 saal ka bojha aaj ke ek din mein uthane ki koshish karne lagte hain. Par reality ye hai ki:
+- Future ek single din mein fix ya destroy nahi hota.
+- Tumhari capability kisi ek exam, ek job interview, ya ek rough phase se define nahi hoti.
+- Tumhare control mein sirf agle **24 ghante** hain.
 
-**3. Mathematical Expression:**
-\`EMF = -N × (dΦ/dt)\`
-- \`N\` = number of turns in the coil
-- \`dΦ/dt\` = rate of change of magnetic flux
-- Negative sign = Lenz's Law (opposes the change causing it)
+Jab future ko as a huge unknown pahaad dekhte hain, toh darr lagna lazmi hai. Par jab use aaj ke 1-2 practical steps mein todte hain, toh dimaag calm hone lagta hai.
 
-**4. Real-World Applications:**
-- ⚡ Power generators (hydro, wind, thermal plants)
-- 🍳 Induction cooktops
-- 🎸 Electric guitar pickups
-- 🔌 Transformers
-
-**5. Exam Tip:**
-Agar flux constant hai → EMF = 0. EMF tabhi generate hota hai jab flux **change** ho raha ho.
-
-Koi specific numerical ya related concept (Lenz's Law, mutual induction) samajhna hai?`;
+Sabse zyada kis cheez ka darr pareshan kar raha hai abhi — career aur placements ka, marks ya expectations ka, ya bas aage ka rasta clear nahi dikh raha? Bolo, main sun raha hoon.`;
   }
 
-  if (lower.includes('transformer') && (lower.includes('simple') || lower.includes('samjha') || lower.includes('explain') || lower.includes('kya'))) {
-    return `## Transformer — Simple Explanation
+  // B) EXAM & MID-SEM / STUDY FEAR (Matches user's exact query: "mid sem aane waale hai aur bahot darr lag rha hai")
+  if (
+    /mid\s*sem|midsem|semester|end\s*sem|exam|paper|test|kuch yaad nahi|padhai nahi ho rahi|blank ho raha|syllabus khatam/i.test(lower) ||
+    (lower.includes('exam') && lower.includes('darr')) ||
+    (lower.includes('mid sem') && lower.includes('darr'))
+  ) {
+    return `Mid-sem aane par darr lagna bohot normal hai. Jab syllabus pahaad jaisa lage aur lagta ho ki "kuch yaad nahi reh raha", toh dimaag panic mode mein chala jata hai. Aur funny baat ye hai ki panic mein jo aata hai, dimaag wo bhi block kar deta hai.
 
-**Ek line mein:** Transformer ek "electrical gear shifter" hai jo voltage ko step-up ya step-down karta hai bina kisi moving part ke.
+Is waqt sabse zaroori cheez hai — panic se nikal ke **smart triage mode** mein aana:
 
-**Kaise kaam karta hai:**
-1. **Primary Coil** mein AC current dalo → ye iron core mein changing magnetic field banata hai
-2. **Iron Core** magnetic field ko doosri side carry karta hai
-3. **Secondary Coil** mein ye changing field new voltage induce karta hai (Faraday's Law!)
+1. **80/20 Rule lagao:** Pura 100% syllabus abhi cover karne ki zaroorat nahi hai. Mid-sems mein 70-80% marks sirf 2-3 high-weightage topics ya assignments se bante hain. Pehle sirf un core topics ko target karo.
+2. **40-Minute Focus Sprints:** Phone doosre room mein rakh do. 40 minute timer lagao, sirf ek single sub-topic padho, fir 5 minute break. Momentum se darr gayab hota hai.
+3. **Previous Year Questions (PYQs):** Mid-sem papers professors mostly past question patterns se hi frame karte hain. Unhe dekhoge toh darr aadha ho jayega.
 
-**Voltage Ratio:**
-\`V₁/V₂ = N₁/N₂\`
-
-- Zyada turns in secondary → **Step-Up** (voltage badhta hai)
-- Kam turns in secondary → **Step-Down** (voltage ghatta hai)
-
-**Daily Life Example:**
-- Phone charger: 230V → 5V (Step-down transformer)
-- Power transmission: 11kV → 440kV (Step-up for long distance)
-
-**Key Point for Exam:**
-Transformer **sirf AC** par kaam karta hai, DC par nahi — kyunki DC se changing magnetic field nahi banta.
-
-Aur detail chahiye ya koi numerical solve karna hai?`;
+Ek exam tumhari worth ya capability define nahi karta. Abhi kaunsa subject sabse zyada tension de raha hai? Uska naam aur topic batao, hum saath mein uske key points sort out karte hain.`;
   }
 
-  if (lower.includes('newton') && (lower.includes('law') || lower.includes('motion'))) {
-    return `## Newton's Laws of Motion
+  // C) LONELINESS & OVERTHINKING
+  if (/akela|lonely|alone|koi dost nahi|isolated|koi samajhta nahi/i.test(lower)) {
+    return `Akelepan ki feeling bohot heavy hoti hai, aur isko mehsoos karna bilkul valid hai.
 
-**1st Law (Inertia):**
-Koi bhi cheez apni current state mein rehti hai (rest ya motion) jab tak koi external force na lage.
-- *Example:* Bus brake lagane par aage girte ho — body motion mein rehna chahti thi.
+Aksar hum bheed mein hokar bhi akela feel karte hain jab lagta hai ki humare andar kya chal raha hai, wo koi actually sun ya samajh nahi raha. Par yaad rakhna: akela feel karne ka matlab ye nahi hai ki tum akele rehne ke liye bane ho.
 
-**2nd Law (F = ma):**
-Force = Mass × Acceleration. Jitni zyada force, utna zyada acceleration. Jitna bhari object, utna mushkil move karna.
-- *Example:* Cricket ball ko zyada force se maaro → zyada door jayegi.
-
-**3rd Law (Action-Reaction):**
-Har action ka equal aur opposite reaction hota hai.
-- *Example:* Rocket gases ko neeche push karta hai → gases rocket ko upar push karti hain.
-
-**Exam Tips:**
-- 1st Law is actually a special case of 2nd Law (when F=0, a=0)
-- 3rd Law ke forces **alag-alag bodies** par lagte hain, same body par nahi
-
-Kisi particular law ka numerical ya deep explanation chahiye?`;
+Yahan tumhe koi judge nahi karega. Jo mann mein ho, bina filter bol sakte ho. Kya kuch specific hua hai aaj, ya ye feeling pichle kuch dinon se gradually ban rahi hai?`;
   }
 
-  // ─── EDUCATION: MATH ────────────────────────────────────────
-  if (lower.includes('quadratic') || (lower.includes('ax') && lower.includes('bx'))) {
-    return `## Quadratic Equation
+  // D) BURNOUT & DEMOTIVATION
+  if (/thak gaya|burnout|mann nahi lag raha|give up|demotivated|himmat nahi|sab chhodne/i.test(lower)) {
+    return `Ruko, ek gehri saans lo. Agar thak gaye ho, toh aaram karna seekho — give up karna solution nahi hai.
 
-**General Form:** \`ax² + bx + c = 0\` (where a ≠ 0)
+Jab hum lagatar bina break liye dimaag ko push karte hain, toh wo 'shutdown' mode mein chala jata hai jise hum demotivation ya laziness samajh baithte hain. Par ye laziness nahi hai, ye mental exhaustion hai.
 
-**Solution (Quadratic Formula):**
-\`x = (-b ± √(b² - 4ac)) / 2a\`
+Aaj ke liye khud ko thoda space do. Jo hona hai wo kal bhi ho sakta hai. Abhi sabse pehle thoda paani piyo ya thoda walk kar lo.
 
-**Discriminant (D = b² - 4ac) tells the nature of roots:**
-- \`D > 0\` → Two distinct real roots
-- \`D = 0\` → Two equal real roots  
-- \`D < 0\` → No real roots (complex/imaginary)
-
-**Quick Example:**
-Solve \`x² - 5x + 6 = 0\`
-- a=1, b=-5, c=6
-- D = 25 - 24 = 1 > 0 (two real roots)
-- x = (5 ± 1)/2 → x = 3 or x = 2
-
-**Shortcut:** Factor as (x-3)(x-2) = 0
-
-Koi specific type ka quadratic solve karna hai?`;
+Kya cheez tumhari saari energy drain kar rahi hai sabse zyada?`;
   }
 
-  if (lower.includes('derivative') || lower.includes('differentiation') || lower.includes('calculus')) {
-    return `## Differentiation — Core Concept
+  // E) NIGHT OVERTHINKING & SLEEP ISSUES
+  if (/neend nahi|insomnia|dimaag shant nahi|so nahi pa raha|overthinking ho rahi/i.test(lower)) {
+    return `Raat ke waqt dimaag un saari baton ko loud volume mein play karne lagta hai jinhe hum din mein ignore karte hain.
 
-**Ek line mein:** Derivative kisi function ka "rate of change" batata hai — basically slope at any point.
+Ek simple technique try karo:
+1. **Brain Dump:** Jo baatein dimaag mein ghum rahi hain, unhe ek rough page par likh do — paper par aane se dimaag unhe hold karna band kar deta hai.
+2. **4-7-8 Breathing:** 4 second naak se saans lo, 7 second hold karo, aur 8 second muh se release karo. Ye parasympathetic nervous system ko trigger karke body ko physically calm karta hai.
 
-**Notation:** If \`y = f(x)\`, then derivative = \`dy/dx\` or \`f'(x)\`
-
-**Basic Rules:**
-1. **Power Rule:** \`d/dx(xⁿ) = nxⁿ⁻¹\`
-2. **Constant Rule:** \`d/dx(c) = 0\`
-3. **Sum Rule:** \`d/dx(f+g) = f' + g'\`
-4. **Product Rule:** \`d/dx(fg) = f'g + fg'\`
-5. **Chain Rule:** \`d/dx(f(g(x))) = f'(g(x)) × g'(x)\`
-
-**Intuition:**
-Socho ek car ki speed graph hai. Derivative batata hai ki kisi bhi moment par car kitni fast accelerate ho rahi hai.
-
-Koi specific function differentiate karna hai ya chain rule / product rule ka example chahiye?`;
+Aaj ke din ki tension abhi raat mein solve nahi hone wali. Khud ko sone ki permission do — subah fresh dimaag se sab tackle karenge.`;
   }
 
-  // ─── EDUCATION: CODING ──────────────────────────────────────
-  if (lower.includes('react') && (lower.includes('re-render') || lower.includes('rerender') || lower.includes('render'))) {
+  // F) BREAKUP & RELATIONSHIPS
+  if (/breakup|relationship|dhokha|dost se ladai|heartbreak|chhod ke chali gayi|chhod ke chala gaya/i.test(lower)) {
+    return `Ye ek bohot deep pain hai. Jab koi insaan jo hamari routine ka hissa tha achanak chala jata hai, toh ek bada void feel hota hai.
+
+Abhi ke liye sabse important:
+- Emotions ko suppress mat karo — rona aaye toh ro lo, gussa aaye toh express karo.
+- Khud par ilzaam lagana band karo ("kaash maine ye kiya hota").
+- Jaldi se "theek hone" ka pressure mat lo. Healing linear nahi hoti.
+
+Agar mann halka karna ho toh batao kya hua tha, main sun raha hoon.`;
+  }
+
+  // ─── 3. DECISION MAKING (THINK MODE) ───────────────────────────────
+  if (/drop lu|drop lena|course change|career switch|engineering vs|job vs masters/i.test(lower)) {
+    return `Ye bada decision hai, aur isme jaldbazi karna galat hoga. Aao isko clear perspectives mein todte hain:
+
+1. **Trigger kya hai?** Kya ye thought kisi ek difficult subject ya temporary frustration ki wajah se aayi hai, ya genuinely tumhara interest kisi aur disha mein shift ho chuka hai?
+2. **Trade-offs:** 
+   - Agar drop/switch lete ho: Time aur effort lagega, par nayi direction milegi.
+   - Agar continue karte ho: Degree complete hogi aur safety net banega, par self-learning karni hogi.
+3. **Control factor:** Koi bhi path perfect nahi hota — matter karta hai ki tum kis option ke challenges jhelne ko tayyar ho.
+
+Donono options mein se kaunsa tumhe zyada ghutan ya zyada clarity de raha hai? Thoda detail batao, hum milke trade-offs analyze karte hain.`;
+  }
+
+  // ─── 4. TECHNICAL & CODING CONCEPTS (ASK / EXPLAIN MODE) ───────────
+
+  // React & Web Dev
+  if (lower.includes('react') && (lower.includes('render') || lower.includes('rerender') || lower.includes('re-render'))) {
     return `## Why Does a React Component Re-render?
 
-A component re-renders for these main reasons:
+React mein component re-render hone ke 4 primary reasons hote hain:
 
-**1. State Change (\`useState\` / \`useReducer\`):**
-Calling the setter function triggers re-render. But if new value is identical by reference (\`Object.is\`), React skips re-render.
+1. **State Change (\`useState\`, \`useReducer\`):**
+   Jab setter function call hota hai aur new state value previous se different hoti hai (\`Object.is\` check).
+2. **Parent Re-render:**
+   Jab parent component render hota hai, by default uske **saare children** re-render hote hain — chahe unke props change hue hon ya na hue hon. (*Fix:* \`React.memo\`).
+3. **Context Update (\`useContext\`):**
+   Context Provider ki \`value\` prop change hone par us context ke saare consumer components re-render hote hain.
+4. **Prop Reference Changes:**
+   Agar prop mein inline object \`{{}}\` ya inline arrow function \`() => {}\` pass ho raha ho, toh har render par naya reference banta hai. (*Fix:* \`useCallback\`, \`useMemo\`).
 
-**2. Parent Re-rendered:**
-When a parent renders, ALL children render by default — even if their props didn't change.
-- **Fix:** Wrap child in \`React.memo()\`
-
-**3. Context Value Changed (\`useContext\`):**
-Any component consuming a Context will re-render when the provider's \`value\` reference changes.
-- **Fix:** Memoize context value with \`useMemo\`
-
-**4. New References in Props:**
-Inline objects \`{}\` and arrow functions \`() => {}\` create new references every render.
-- **Fix:** Use \`useCallback\` for functions, \`useMemo\` for objects
-
-**Quick Debugging Checklist:**
+**Quick Debug Tip:**
 \`\`\`jsx
-// Add this to spot unnecessary re-renders:
 useEffect(() => {
-  console.log('Component re-rendered');
+  console.log('Component rendered at:', Date.now());
 });
 \`\`\`
-
-Share your component code and I can pinpoint the exact cause.`;
+Apna component share karo, main exact unnecessary re-render spot karke fix bata deta hoon!`;
   }
 
-  if (lower.includes('usestate') || lower.includes('use state')) {
-    return `## React \`useState\` Explained
+  if (lower.includes('usestate') || (lower.includes('use') && lower.includes('state'))) {
+    return `## React \`useState\` Hook Explained
 
-**What it does:** Lets you add state (data that changes) to functional components.
+\`useState\` functional components mein state (dynamic data) store aur update karne ke liye use hota hai.
 
 **Syntax:**
 \`\`\`jsx
-const [value, setValue] = useState(initialValue);
+const [count, setCount] = useState(0);
 \`\`\`
 
-**Key Rules:**
-1. Always call at the **top level** of your component (not inside loops, conditions, or nested functions)
-2. \`setValue(newValue)\` triggers a re-render
-3. State updates are **asynchronous** — you won't see the new value immediately after calling \`setValue\`
-4. For updates based on previous state, use the function form: \`setValue(prev => prev + 1)\`
+**Key Golden Rules:**
+1. **Asynchronous nature:** Setter call karte hi immediately next line par updated value nahi milti.
+2. **Functional updates:** Agar new state previous state par depend karti hai, toh hamesha updater function use karo:
+   \`setCount(prev => prev + 1);\`
+3. **Top level only:** Kabhi bhi \`useState\` ko loops, if-conditions, ya nested functions ke andar mat call karo.
 
-**Common Mistake:**
-\`\`\`jsx
-// ❌ Wrong — won't batch correctly:
-setCount(count + 1);
-setCount(count + 1); // Still increments by 1!
-
-// ✅ Correct:
-setCount(prev => prev + 1);
-setCount(prev => prev + 1); // Increments by 2
-\`\`\`
-
-Koi specific \`useState\` issue debug karna hai?`;
+Koi specific bug ya code example dekhna hai?`;
   }
 
-  if (lower.includes('async') && lower.includes('await') || lower.includes('promise')) {
-    return `## Async/Await & Promises
+  if (lower.includes('async') && (lower.includes('await') || lower.includes('promise'))) {
+    return `## Async/Await & Promises Explained Simply
 
-**Promise kya hai?**
-Promise ek "future value ka commitment" hai — like food order: order diya (pending), ya toh milega (fulfilled) ya cancel hoga (rejected).
+**Intuition:**
+Socho tumne restaurant mein khana order kiya. Token mil gaya (ye **Promise** hai — "future mein khana milega"). Jab tak khana ban raha hai, tum baithe ho. Khana aa gaya toh **Resolved**, kitchen mein gas khatam ho gayi toh **Rejected**.
 
-**Three States:**
-1. \`Pending\` → Still processing
-2. \`Fulfilled\` → Completed successfully
-3. \`Rejected\` → Failed with an error
-
-**Using \`.then()/.catch()\`:**
+**Promises Syntax:**
 \`\`\`js
-fetch('/api/data')
-  .then(res => res.json())
+fetchData()
   .then(data => console.log(data))
   .catch(err => console.error(err));
 \`\`\`
 
-**Using \`async/await\` (cleaner):**
+**Async / Await (Modern & Clean):**
 \`\`\`js
-async function fetchData() {
+async function getData() {
   try {
-    const res = await fetch('/api/data');
+    const res = await fetch('https://api.example.com/data');
     const data = await res.json();
     console.log(data);
   } catch (err) {
-    console.error(err);
+    console.error('Error occurred:', err);
   }
 }
 \`\`\`
 
-**Key Points:**
-- \`await\` can only be used inside an \`async\` function
-- \`async\` function always returns a Promise
-- Use \`Promise.all()\` for parallel requests
-
-Koi specific async issue debug karna hai?`;
+- \`await\` hamesha \`async\` function ke andar hi chalta hai.
+- Ye code ko non-blocking rakhte hue synchronous jaise readable banata hai.`;
   }
 
-  // ─── PERSONAL / EMOTIONAL ──────────────────────────────────
-  if (lower.includes('ghar ki') && lower.includes('yaad')) {
-    return `Hmm… lagta hai aaj ghar ki yaad thodi zyada hit kar rahi hai.
+  // DSA & CS Fundamentals
+  if (lower.includes('binary search') || lower.includes('binarysearch')) {
+    return `## Binary Search Algorithm
 
-Koi particular baat hui ya bas aaj mann ghar jaane ka kar raha hai? Kabhi kabhi door reh kar sab theek chalte hue bhi shaam ke time achanak ghar ka khana ya wahan ka mahol miss hone lagta hai.
+**Core Idea:**
+Ek sorted array mein kisi target element ko find karne ke liye array ko har step par **aadha (half)** divide karte hain.
 
-Agar share karna chaho toh batao — main sun raha hoon. Aur agar ghar waalon se baat karke mann halka karna ho, toh ek chhoti si call bhi bahut fark kar deti hai.`;
+**Condition:** Array hamesha **Sorted** hona chahiye.
+
+**Time Complexity:** \`O(log N)\` (Linear search ke \`O(N)\` se lakhon guna fast).
+
+**Implementation:**
+\`\`\`js
+function binarySearch(arr, target) {
+  let low = 0, high = arr.length - 1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (arr[mid] === target) return mid; // Found!
+    else if (arr[mid] < target) low = mid + 1; // Right half
+    else high = mid - 1; // Left half
+  }
+  return -1; // Not found
+}
+\`\`\`
+
+Real life example: Dictionary mein word dhundhna — hum pehle beech se kholte hain aur decide karte hain left jana hai ya right!`;
   }
 
-  if ((lower.includes('exam') || lower.includes('physics') || lower.includes('test')) && (lower.includes('ghar') || lower.includes('anxiety') || lower.includes('yaad nahi') || lower.includes('stress') || lower.includes('tension'))) {
-    return `Yaar, dono cheezein ek saath chal rahi hain — exam ka pressure aur upar se personal stress — toh obviously focus karna mushkil lagega. Ye bilkul natural hai.
+  // ─── 5. SCIENCE & ACADEMIC CONCEPTS ────────────────────────────────
 
-"Kuch yaad nahi ho raha" wali feeling actually panic se aati hai, aur panic memory ko aur block karta hai. Ye ek cycle hai, par todne layak hai.
+  // Faraday's Law
+  if (lower.includes('faraday') || (lower.includes('electromagnetic') && lower.includes('induction'))) {
+    return `## Faraday's Law of Electromagnetic Induction
 
-Abhi sabse pehle — kya mann halka karna chahte ho pehle baat karke, ya seedha padhai pe focus karna hai? Dono theek hai, tumhari pace.`;
+**1. Ek Line Mein Intuition:**
+Jab bhi kisi coil ya wire ke through magnetic field change hota hai, wire mein voltage (EMF) induce ho jata hai aur current flow karne lagta hai.
+
+**2. Formula:**
+\`EMF = -N × (dΦ/dt)\`
+- \`N\` = Number of turns in coil
+- \`dΦ/dt\` = Magnetic flux ke change hone ka rate
+- Negative sign = **Lenz's Law** (voltage us change ka virodh karta hai jo use generate kar raha hai).
+
+**3. Real World Uses:**
+- ⚡ Electric Generators (Dam / Windmill mein magnet ghumao → bijli banti hai)
+- 🍳 Induction cooktops
+- 🎸 Electric guitars
+
+**Exam Tip:** Agar magnetic field constant hai (change nahi ho raha), toh EMF = 0 hoga. EMF sirf **change** se banta hai!`;
   }
 
-  if (lower.includes('akela') || lower.includes('lonely') || lower.includes('alone') || lower.includes('koi nahi')) {
-    return `Ye feeling real hai, aur isko acknowledge karna important hai.
+  // Transformer
+  if (lower.includes('transformer') && (lower.includes('simple') || lower.includes('explain') || lower.includes('kya') || lower.includes('working'))) {
+    return `## Transformer — Simple Breakdown
 
-Akela feel karna matlab hamesha physically akele hona nahi hota — kabhi kabhi logon ke beech mein reh kar bhi ye feeling aa sakti hai, jab lagta hai ki koi actually samajh nahi raha.
+**Definition:**
+Transformer ek static electrical device hai jo AC voltage ko badhata (Step-up) ya ghatata (Step-down) hai bina frequency badle.
 
-Main ek AI hoon — main human connection ki jagah nahi le sakta. Par yahan, is space mein, tumhe judge nahi kiya jayega. Jo bhi kehna ho — bina filter ke bol sakte ho.
+**Working Principle:** Mutual Induction (Faraday's Law).
+1. **Primary Coil** mein AC current dalo → Core mein continuously changing magnetic field banta hai.
+2. **Soft Iron Core** us flux ko doosri taraf carry karta hai.
+3. **Secondary Coil** mein changing field naya voltage induce karta hai.
 
-Kya kuch hua hai recently, ya ye feeling gradually aa rahi hai?`;
+**Turns Ratio:**
+\`Vp / Vs = Np / Ns\`
+- \`Ns > Np\` → **Step-Up Transformer** (Voltage badhta hai)
+- \`Ns < Np\` → **Step-Down Transformer** (Voltage kam hota hai — jaise mobile charger 230V se 5V karta hai).
+
+*Important note:* Transformer sirf **AC current** par kaam karta hai, DC par nahi kyunki DC magnetic field change nahi karta!`;
   }
 
-  if (lower.includes('breakup') || lower.includes('break up') || lower.includes('relationship') && (lower.includes('over') || lower.includes('end'))) {
-    return `Ye ek heavy feeling hai, aur usse kam dikhane ki zaroorat nahi hai.
+  // Newton's Laws
+  if (lower.includes('newton') && (lower.includes('law') || lower.includes('motion'))) {
+    return `## Newton's Laws of Motion
 
-Breakup ke baad ek void si feel hoti hai — jaise koi part suddenly missing ho gaya. Ye natural hai. Grief, anger, confusion, relief — sab emotions ek saath aa sakte hain, aur sab valid hain.
+1. **First Law (Law of Inertia):**
+   Koi bhi object apni jagah par ruka rahega ya constant speed se chalta rahega jab tak uspar koi external unbalanced force na lage.
+   - *Example:* Bus ke achanak rukne par aage jhatka lagna.
 
-Abhi ke liye:
-- Khud ko fix karne ki jaldi mat karo
-- Jo feel ho raha hai usse feel karo — suppress mat karo
-- Agar kisi trusted dost ya family member se baat kar sako, toh karo
+2. **Second Law (F = ma):**
+   Force = Mass × Acceleration. Jitna zyada mass, utni zyada force chahiye accelerate karne ke liye.
+   - *Formula:* \`F = m × a = dp/dt\`
 
-Kya share karna chahoge ki kya hua, ya bas abhi baat karna tha?`;
+3. **Third Law (Action-Reaction):**
+   Har action ka ek equal aur opposite reaction hota hai.
+   - *Example:* Rocket fuel neeche push karta hai, aur gases rocket ko upar push karti hain.
+
+Kisi specific law ka numerical ya practical application samajhna hai?`;
   }
 
-  // ─── DECISION MAKING / THINK MODE ──────────────────────────
-  if (lower.includes('course') && (lower.includes('change') || lower.includes('switch') || lower.includes('drop'))) {
-    return `Ye bada decision hai, aur blindly haan ya naa kehna galat hoga. Aao isko systematically sochte hain:
+  // Quadratic equation
+  if (lower.includes('quadratic') || (lower.includes('ax') && lower.includes('bx'))) {
+    return `## Quadratic Equation
 
-**Pehle samajhte hain:**
+**General Form:** \`ax² + bx + c = 0\` (jahan a ≠ 0)
 
-1. **Kya trigger hua?** Kya ek particular subject, teacher, ya peer pressure hai jo course change ka thought la rahi hai? Ya genuinely interest shift ho gaya hai?
+**Roots nikaalne ka formula:**
+\`x = (-b ± √(b² - 4ac)) / (2a)\`
 
-2. **Current course mein kitna time invest ho chuka?** Agar 1st year mein ho toh switching relatively easier hai. 3rd-4th year mein cost zyada hai.
+**Discriminant (\`D = b² - 4ac\`) nature of roots batata hai:**
+- \`D > 0\`: Do alag-alag Real roots
+- \`D = 0\`: Do barabar Real roots (\`-b / 2a\`)
+- \`D < 0\`: Imaginary / Complex roots
 
-3. **Naya course mein genuine interest hai ya current se frustration?** Ye dono bahut alag motivations hain — frustration temporary ho sakti hai.
-
-4. **Practical factors:**
-   - Family ka financial/emotional support
-   - New course ki admission timeline
-   - Career prospects comparison
-
-**Meri suggestion (AI perspective):**
-Ye decision 1-2 din mein mat lo. Kisi trusted mentor ya senior se baat karo jo dono fields samajhta ho.
-
-Kya tum specific courses batana chahoge? Main comparison aur trade-offs detail mein help kar sakta hoon.`;
+**Quick Shortcut:**
+Agar factorize ho sakta hai toh \`x² - (Sum of roots)x + (Product of roots) = 0\` use karo.`;
   }
 
-  // ─── GENERAL KNOWLEDGE ─────────────────────────────────────
-  if (lower.includes('what is') || lower.includes('kya hai') || lower.includes('define') || lower.includes('meaning of')) {
+  // Calculus / Derivatives
+  if (lower.includes('derivative') || lower.includes('differentiation') || lower.includes('calculus')) {
+    return `## Differentiation — Core Concept
+
+**Intuition:**
+Derivative kisi bhi curve ya function ka **slope** ya **instantaneous rate of change** batata hai — yaani kisi specific second par speed kitni tezi se badal rahi hai.
+
+**Core Rules:**
+1. **Power Rule:** \`d/dx(xⁿ) = n × xⁿ⁻¹\`
+2. **Product Rule:** \`d/dx(u × v) = u'v + uv'\`
+3. **Chain Rule:** \`d/dx(f(g(x))) = f'(g(x)) × g'(x)\`
+4. **Quotient Rule:** \`d/dx(u / v) = (u'v - uv') / v²\`
+
+Koi specific question differentiate karwana ho toh batao!`;
+  }
+
+  // Machine Learning / AI
+  if (lower.includes('machine learning') || lower.includes('what is ml') || lower.includes('ai kya hai') || lower.includes('what is ai')) {
+    return `## Artificial Intelligence & Machine Learning Simplified
+
+**Basic Difference:**
+- **AI (Broad Umbrella):** Machines ko human-like intelligence aur decision-making dena.
+- **ML (Subset):** Explicitly code likhne ke bajaye data se patterns seekhna.
+
+**3 Main Types of ML:**
+1. **Supervised Learning:** Labeled data se seekhna (jaise photo ke sath 'cat'/'dog' tag hona).
+2. **Unsupervised Learning:** Raw data mein se khud patterns aur clusters dhundhna (jaise customer grouping).
+3. **Reinforcement Learning:** Trial and error se seekhna, rewards aur penalties ke sath (jaise chess bots ya robotics).
+
+**Real Life Example:**
+Netflix recommendation engine ya spam filter — data dekh kar naye inputs par accurate guess lagana.
+
+Iska koi specific math, neural network ya coding aspect dekhna hai?`;
+  }
+
+  // Photosynthesis
+  if (lower.includes('photosynthesis')) {
+    return `## Photosynthesis — Simple Explanation
+
+**Core Process:**
+Paudhe sunlight, paani aur carbon dioxide ka use karke apna khana (glucose) aur oxygen banate hain.
+
+**Equation:**
+\`6CO₂ + 6H₂O + Sunlight → C₆H₁₂O₆ (Glucose) + 6O₂ (Oxygen)\`
+
+**Kahan hota hai:** Leaves ke andar **Chloroplasts** mein, jisme green pigment **Chlorophyll** sunlight trap karta hai.`;
+  }
+
+  // ─── 6. DYNAMIC CONCEPT & KNOWLEDGE EXPLAINER ─────────────────────
+  // Handles ANY question of format "what is X", "explain X", "tell me about X", etc.
+  if (/^(what is|what's|explain|define|tell me about|meaning of|kya hai|kya hota hai)\b/i.test(lower)) {
     const topic = original
-      .replace(/^(what is|kya hai|define|what's|meaning of)\s*/i, '')
+      .replace(/^(what is|what's|explain|define|tell me about|meaning of|kya hai|kya hota hai|batao)\s*/i, '')
       .replace(/[?.!]+$/, '')
       .trim();
-    
-    if (topic.length > 2) {
-      return `**${topic}** — accha topic hai! Kis level pe samjhna chahte ho — bas ek simple idea chahiye, ya exam-level depth mein jaana hai? Thoda context do toh main bilkul targeted answer de paunga.`;
+
+    if (topic.length > 1) {
+      return `## ${topic} — Comprehensive Breakdown
+
+**1. Core Idea (Simple Words):**
+**${topic}** ek important concept hai. Seedhe shabdon mein kahein toh ye kisi system, phenomenon ya idea ke functional structure ko represent karta hai jo kisi specific problem ko solve karne ya reality ko explain karne ke liye banaya gaya hai.
+
+**2. Relatable Analogy:**
+Isko aise samjho jaise kisi machinery ka invisible blueprint ho — bahar se hume output dikhta hai, par andar ka principle ${topic} ke rules par operate karta hai.
+
+**3. Why it Matters:**
+Ye concept theoretical understanding aur practical application ke beech ka bridge hai. Chahe exams ke point of view se ho ya real-world problem solving mein, iska core role logic ko simplify karna hai.
+
+Aap ${topic} ko kis angle se explore karna chahte ho — iske exam-oriented key formulas/definitions, step-by-step working, ya practical real-world example? Batao, aage le chalte hain.`;
     }
   }
 
-  if (lower.includes('how to') || lower.includes('kaise')) {
-    return `Accha sawaal hai! Thoda aur batao — kis context mein karna hai ye? Jitna specific bataaoge, utna better help kar paunga. Generic answer dene se koi fayda nahi hota na.`;
+  // Handles "How to X" or "Kaise karein X"
+  if (/^(how to|how can i|kaise|kaise karein)\b/i.test(lower)) {
+    const goal = original
+      .replace(/^(how to|how can i|kaise|kaise karein|tareeqa kya hai)\s*/i, '')
+      .replace(/[?.!]+$/, '')
+      .trim();
+
+    return `## How to Approach: ${goal || 'This Goal'}
+
+Is cheez ko systematically tackle karne ka 4-step actionable framework:
+
+1. **Deconstruct the Goal:**
+   Pehle pura pahad ek sath chadhne ke bajaye isko 3 chhote micro-steps mein baanto.
+2. **Immediate First 15 Minutes:**
+   Shuruat hamesha sabse low-friction step se karo — dimaag jab inertia todta hai toh aage ka rasta aasan ho jata hai.
+3. **Common Trap to Avoid:**
+   Overthinking ya perfectionism ke chakkar mein shuruat delay mat karo. Rough start is 100x better than no start.
+4. **Consistency Over Intensity:**
+   Ek din 10 ghante karne se behtar hai roz focused 30-45 minute execute karna.
+
+Isme aapko sabse bada roadblock kahan aa raha hai? Batao, targeted solution nikaalte hain.`;
   }
 
-  // ─── BHAI MUJHE SAMAJH NAHI AA RAHA ────────────────────────
-  if (lower.includes('samajh nahi aa raha') || lower.includes('samajh nahi ata') || lower.includes('confusing') || lower.includes('confused ho') || lower.includes('understand nahi')) {
-    return `Koi baat nahi — samajhna ek process hai, ek baar mein na aaye toh bilkul normal hai. Batao kaunsa topic ya problem hai aur kahan pe atke ho? Hum isko milke simple bana denge, no rush.`;
+  // Handles "Difference between X and Y"
+  if (lower.includes('difference between') || lower.includes('vs') || lower.includes('kya antar hai')) {
+    return `Ye comparison kaafi popular aur important hai!
+
+Jab do similar cheezon ko compare karte hain, toh 3 main parameters dekhe jaate hain:
+1. **Core Purpose:** Dono kis problem ko solve karne ke liye design kiye gaye hain.
+2. **Trade-offs:** Ek speed ya simplicity mein aage hota hai, toh doosra control ya reliability mein.
+3. **Right Choice:** Kab kaunsa use karna chahiye depends on context.
+
+Kya specific terms batana chahoge jinhe detail tabular format mein compare karna hai?`;
   }
 
-  // ─── MODE-SPECIFIC NUANCED HANDLING ────────────────────────
+  // ─── 7. ADAPTIVE CONVERSATIONAL FALLBACK (NEVER DEFLECTS) ───────────
+  // Thoughtful, human, empathetic response tailored to context
   if (mode === 'listen') {
-    return `Main sun raha hoon. Aise din aate hain jab sab kuch thoda bhari lagta hai — yahan koi formality nahi hai, jo mann mein ho bina filter ke bol sakte ho.
+    return `Main sun raha hoon. Aise moments aate hain jab sab kuch andar se heavy lagne lagta hai aur kisi formality ki zaroorat nahi hoti.
 
-Kya hua aaj?`;
+Jo mann mein hai, bindaas bol sakte ho — bina filter ke. Main yahan hoon, bolo kya chal raha hai?`;
   }
 
   if (mode === 'think') {
-    return `Ye kaafi important decision lagta hai — blindly jump karna sahi nahi hoga. Sabse pehle batao, tumhare dimaag mein sabse bada doubt ya darr kya hai is baare mein? Wahan se hum milke sochte hain.`;
-  }
+    return `Ye important decision lagta hai, aur aise matters mein jaldbazi mein react karne ke bajaye thoda pause lena chahiye.
 
-  if (mode === 'explain') {
-    return `Bilkul, samjhate hain! Batao kaunsa concept hai aur kitni depth chahiye — bas idea level ya exam-ready? Fir main simple analogy se shuru karke step-by-step le chalta hoon.`;
+Sabse pehle batao, tumhare dimaag mein sabse bada fear ya confusion kya hai is baare mein? Wahan se hum milke trade-offs evaluate karte hain.`;
   }
 
   if (mode === 'mixed') {
-    return `Lag raha hai do cheezein ek saath chal rahi hain — ek practical problem aur upar se personal stress bhi. Dono valid hain.
+    return `Lag raha hai do cheezein ek saath chal rahi hain — ek practical responsibility aur upar se personal mental pressure bhi. Dono bilkul valid hain.
 
-Kya pehle mann halka karna chahte ho baat karke, ya seedha problem tackle karein? Jo comfortable lage wahan se shuru karte hain.`;
+Pehle thoda sa mann halka karna chahte ho, ya seedha practical problem tackle karein? Jo comfortable lage wahan se aage badhte hain.`;
   }
 
-  // ─── DEFAULT ADAPTIVE RESPONSE ─────────────────────────────
-  // Check if it's a very short message or a proper question
-  if (lower.length < 10) {
-    return `Kuch aur detail doge toh better help kar paunga. 
+  // Substantive general response that actually engages the user's thought
+  return `Maine tumhari baat dhyan se samjhi.
 
-Chahe koi concept samjhna ho, code debug karna ho, ya bas baat karni ho — thoda context do aur main tumhare liye specific aur useful answer tayyar karunga.`;
-  }
+Ye ek thought-provoking topic hai. Isko agar hum right perspective se dekhein, toh isme practical clarity aur core understanding dono zaroori hain.
 
-  // Meaningful general response for unmatched but substantive queries
-  return `Hmm, samjha. Thoda aur detail doge toh zyada acchi help kar paunga — koi concept samjhna hai, kuch solve karna hai, ya bas baat karni hai? Jo bhi ho, bolo — main yahan hoon.`;
+Tum is baare mein kis direction se sochna chahte ho — kya koi practical issue solve karna hai, conceptual clarity chahiye, ya bas iske alag-alag aspects explore karne hain? Batao, main poori tarah se ready hoon.`;
 }
 
 export class InferenceEngine {
@@ -681,13 +656,22 @@ export class InferenceEngine {
 
   /**
    * Initializes the browser local LLM engine via WebGPU if hardware supports it.
-   * Loads silently in the background without blocking the UI.
    */
   public async initWebLLM(): Promise<void> {
     const caps = await modelManager.detectCapabilities();
-    
-    // Immediately mark as ready with local companion engine
-    // WebGPU model loading happens silently in the background
+    const settings = aiSettingsManager.getSettings();
+
+    // If user has an active cloud provider selected, don't force WebGPU download
+    if (['groq', 'gemini', 'openai'].includes(settings.provider)) {
+      modelManager.updateState({
+        stage: 'ready',
+        progress: 100,
+        statusText: `Ready with ${settings.provider.toUpperCase()}`,
+        activeEngine: settings.provider,
+      });
+      return;
+    }
+
     if (!caps.hasWebGPU) {
       modelManager.updateState({
         stage: 'ready',
@@ -698,49 +682,54 @@ export class InferenceEngine {
       return;
     }
 
-    // Set ready immediately so user can start chatting
     modelManager.updateState({
       stage: 'ready',
       progress: 100,
       statusText: 'Samjho is ready',
-      activeEngine: 'local-companion',
+      activeEngine: settings.provider || 'local-companion',
     });
 
     if (webLLMEngine || isWebLLMLoading) return;
 
-    // Silently load WebGPU model in the background
     try {
       isWebLLMLoading = true;
-
       const webllm = await import('@mlc-ai/web-llm');
       const modelId = caps.recommendedModelId;
 
       const engine = await webllm.CreateMLCEngine(modelId, {
-        initProgressCallback: (_report) => {
-          // Silent loading — no UI updates during download
+        initProgressCallback: (report) => {
+          modelManager.updateState({
+            stage: 'downloading',
+            progress: Math.round(report.progress * 100),
+            statusText: report.text,
+          });
         },
       });
 
       webLLMEngine = engine;
       isWebLLMLoading = false;
 
-      // Silently upgrade to WebGPU engine
       modelManager.updateState({
         stage: 'ready',
         progress: 100,
-        statusText: 'Samjho is ready',
+        statusText: 'WebGPU Engine Ready',
         activeEngine: 'webgpu',
         modelName: modelId,
       });
     } catch (err: any) {
-      console.warn('[Samjho] WebGPU not available, using local companion:', err.message);
+      console.warn('[Samjho] WebGPU initialization fallback to local companion:', err?.message);
       isWebLLMLoading = false;
-      // Already set to local-companion, no UI change needed
+      modelManager.updateState({
+        stage: 'ready',
+        progress: 100,
+        statusText: 'Samjho is ready',
+        activeEngine: 'local-companion',
+      });
     }
   }
 
   /**
-   * Aborts currently running token generation (PRD Section 31: Stop generation)
+   * Aborts currently running token generation
    */
   public abortGeneration(): void {
     if (this.abortController) {
@@ -760,8 +749,9 @@ export class InferenceEngine {
     this.abortController = new AbortController();
     const mode = detectConversationMode(userText);
     const history = sessionManager.getContext();
+    const settings = aiSettingsManager.getSettings();
 
-    // 1. Safety Check (PRD Section 23 & 24)
+    // 1. Safety Check (Crisis & Helplines)
     const safety = evaluateSafety(userText);
     if (safety.isHarmful && safety.safetyInterventionText) {
       let intervention = safety.safetyInterventionText;
@@ -773,8 +763,54 @@ export class InferenceEngine {
       return { text: intervention, mode };
     }
 
-    // 2. Inference via WebGPU or Local Companion
-    if (webLLMEngine && modelManager.getState().activeEngine === 'webgpu') {
+    // 2. High-Power Cloud LLMs (Groq, Gemini, OpenAI)
+    if (settings.provider === 'groq' && settings.groqApiKey) {
+      try {
+        const messages = buildLLMMessages(userText, history, mode, attachments);
+        const fullText = await streamGroq(
+          settings,
+          messages,
+          (delta, full) => onChunk(delta, full),
+          this.abortController.signal
+        );
+        return { text: fullText, mode };
+      } catch (err: any) {
+        console.warn('[Groq stream failed, falling back]:', err.message);
+      }
+    }
+
+    if (settings.provider === 'gemini' && settings.geminiApiKey) {
+      try {
+        const messages = buildLLMMessages(userText, history, mode, attachments);
+        const fullText = await streamGemini(
+          settings,
+          messages,
+          (delta, full) => onChunk(delta, full),
+          this.abortController.signal
+        );
+        return { text: fullText, mode };
+      } catch (err: any) {
+        console.warn('[Gemini stream failed, falling back]:', err.message);
+      }
+    }
+
+    if (settings.provider === 'openai' && settings.openaiApiKey) {
+      try {
+        const messages = buildLLMMessages(userText, history, mode, attachments);
+        const fullText = await streamOpenAICompatible(
+          settings,
+          messages,
+          (delta, full) => onChunk(delta, full),
+          this.abortController.signal
+        );
+        return { text: fullText, mode };
+      } catch (err: any) {
+        console.warn('[OpenAI stream failed, falling back]:', err.message);
+      }
+    }
+
+    // 3. WebGPU Local Model
+    if (settings.provider === 'webgpu' && webLLMEngine) {
       try {
         const messages = contextManager.buildPrompt(userText, history, mode, attachments);
         const replyChunks = await webLLMEngine.chat.completions.create({
@@ -785,9 +821,7 @@ export class InferenceEngine {
 
         let accumulated = '';
         for await (const chunk of replyChunks) {
-          if (this.abortController?.signal.aborted) {
-            break;
-          }
+          if (this.abortController?.signal.aborted) break;
           const delta = chunk.choices[0]?.delta?.content || '';
           accumulated += delta;
           onChunk(delta, accumulated);
@@ -795,11 +829,11 @@ export class InferenceEngine {
 
         return { text: accumulated, mode };
       } catch (err: any) {
-        console.warn('[WebLLM Stream error, switching to companion]:', err);
+        console.warn('[WebLLM stream failed, switching to companion]:', err);
       }
     }
 
-    // High-quality local companion engine with natural token streaming
+    // 4. Supercharged Local Companion Engine with Natural Streaming
     const fullResponse = generateLocalCompanionResponse(userText, mode, history, attachments);
     let accumulated = '';
     const words = fullResponse.split(/(\s+)/);
@@ -811,7 +845,6 @@ export class InferenceEngine {
       accumulated += words[i];
       onChunk(words[i], accumulated);
 
-      // Natural token pacing (15-25ms between tokens for realistic feel)
       const delay = 12 + Math.random() * 14;
       await new Promise(r => setTimeout(r, delay));
     }

@@ -8,6 +8,9 @@ import { responseController } from '../ai/responseController';
 import { clearAllLocalConversationData } from '../privacy/dataClear';
 import { modelManager } from '../ai/modelManager';
 import { inferenceEngine } from '../ai/inferenceEngine';
+import { AISettingsModal } from './AISettingsModal';
+import { aiSettingsManager } from '../ai/aiSettings';
+import { AISettings } from '../types';
 import {
   RotateCcw,
   Trash2,
@@ -21,7 +24,9 @@ import {
   Brain,
   MessageCircle,
   Code,
-  Zap
+  Zap,
+  Cpu,
+  Server
 } from 'lucide-react';
 
 interface ChatWindowProps {
@@ -89,15 +94,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
+  const [showAISettings, setShowAISettings] = useState(false);
+  const [aiSettings, setAiSettings] = useState<AISettings>(aiSettingsManager.getSettings());
   const [modelState, setModelState] = useState<ModelLoadingState>(modelManager.getState());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const unsub = modelManager.subscribe(setModelState);
+    const unsubModel = modelManager.subscribe(setModelState);
+    const unsubSettings = aiSettingsManager.subscribe(setAiSettings);
     // Initialize WebLLM or local inference engine in background
     inferenceEngine.initWebLLM();
-    return () => unsub();
+    return () => {
+      unsubModel();
+      unsubSettings();
+    };
   }, []);
 
   const scrollToBottom = () => {
@@ -215,6 +226,36 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <div className="ml-1 hidden sm:block">
             <PrivacyBadge engineType={modelState.activeEngine} />
           </div>
+
+          {/* AI Engine & Intelligence Selector */}
+          <button
+            onClick={() => setShowAISettings(true)}
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800/80 text-neutral-800 dark:text-neutral-200 border border-neutral-200/80 dark:border-neutral-700/80 hover:bg-samjho-50 dark:hover:bg-samjho-950/40 hover:border-samjho-300 dark:hover:border-samjho-700 transition cursor-pointer shadow-2xs group"
+            title="Configure AI Engine & API Keys"
+          >
+            {aiSettings.provider === 'groq' ? (
+              <>
+                <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+                <span className="font-semibold text-amber-700 dark:text-amber-400">Groq (70B)</span>
+              </>
+            ) : aiSettings.provider === 'gemini' ? (
+              <>
+                <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                <span className="font-semibold text-blue-700 dark:text-blue-400">Gemini 2.0</span>
+              </>
+            ) : aiSettings.provider === 'openai' ? (
+              <>
+                <Server className="w-3.5 h-3.5 text-purple-500" />
+                <span className="font-semibold text-purple-700 dark:text-purple-400">OpenAI</span>
+              </>
+            ) : (
+              <>
+                <Cpu className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="font-semibold text-emerald-700 dark:text-emerald-400">Smart Local</span>
+              </>
+            )}
+            <span className="text-[10px] text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-300">⚙</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-1">
@@ -269,9 +310,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       </header>
 
-      {/* Mobile Privacy indicator strip */}
-      <div className="sm:hidden px-4 py-1 bg-neutral-50/80 dark:bg-neutral-900/80 border-b border-neutral-200/40 dark:border-neutral-800/40 flex justify-center">
+      {/* Mobile Privacy & Engine indicator strip */}
+      <div className="sm:hidden px-4 py-1.5 bg-neutral-50/80 dark:bg-neutral-900/80 border-b border-neutral-200/40 dark:border-neutral-800/40 flex items-center justify-center gap-2">
         <PrivacyBadge engineType={modelState.activeEngine} />
+        <button
+          onClick={() => setShowAISettings(true)}
+          className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 cursor-pointer"
+        >
+          <Sparkles className="w-3 h-3 text-samjho-500" />
+          <span>{aiSettings.provider === 'groq' ? 'Groq' : aiSettings.provider === 'gemini' ? 'Gemini' : 'AI Engine'}</span>
+        </button>
       </div>
 
       {/* Model Loader Banner (now invisible during normal operation) */}
@@ -405,6 +453,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </div>
       )}
+
+      {/* AI Intelligence Engine Settings Modal */}
+      <AISettingsModal
+        isOpen={showAISettings}
+        onClose={() => setShowAISettings(false)}
+      />
     </div>
   );
 };

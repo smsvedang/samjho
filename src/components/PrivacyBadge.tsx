@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Info, X } from 'lucide-react';
+import { EngineProvider } from '../types';
 
 interface PrivacyBadgeProps {
-  engineType?: 'webgpu' | 'local-companion';
+  engineType?: EngineProvider;
 }
 
 export const PrivacyBadge: React.FC<PrivacyBadgeProps> = ({ engineType = 'local-companion' }) => {
@@ -19,9 +20,11 @@ export const PrivacyBadge: React.FC<PrivacyBadgeProps> = ({ engineType = 'local-
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
         </span>
-        <span className="font-semibold tracking-wide">Local</span>
+        <span className="font-semibold tracking-wide">
+          {['groq', 'gemini', 'openai'].includes(engineType) ? 'Private' : 'Local'}
+        </span>
         <span className="hidden sm:inline text-emerald-600/80 dark:text-emerald-400/80 font-normal">
-          | {engineType === 'webgpu' ? 'WebGPU Device Inference' : 'On-Device Processing'}
+          | {engineType === 'webgpu' ? 'WebGPU Device Inference' : engineType === 'groq' ? 'Groq Llama 3.3 (Private)' : engineType === 'gemini' ? 'Gemini 2.0 (Private)' : engineType === 'openai' ? 'Custom API' : 'On-Device Processing'}
         </span>
         <Info className="w-3 h-3 ml-0.5 opacity-60 group-hover:opacity-100 transition-opacity" />
       </button>

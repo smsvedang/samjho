@@ -58,6 +58,17 @@ export type ModelStage =
   | 'error'
   | 'unsupported';
 
+export type EngineProvider = 'local-companion' | 'groq' | 'gemini' | 'openai' | 'webgpu';
+
+export interface AISettings {
+  provider: EngineProvider;
+  groqApiKey?: string;
+  geminiApiKey?: string;
+  openaiApiKey?: string;
+  openaiBaseUrl?: string;
+  openaiModel?: string;
+}
+
 export interface ModelLoadingState {
   stage: ModelStage;
   progress: number; // 0 - 100
@@ -66,7 +77,7 @@ export interface ModelLoadingState {
   bytesDownloaded?: string;
   totalBytes?: string;
   error?: string;
-  activeEngine: 'webgpu' | 'local-companion';
+  activeEngine: EngineProvider;
 }
 
 export interface SafetyCheckResult {
