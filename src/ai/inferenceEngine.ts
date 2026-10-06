@@ -18,9 +18,15 @@ export function detectConversationMode(text: string): ConversationMode {
 
   // Mixed detection: emotional/personal + academic/work
   const hasAcademic = /exam|physics|math|syllabus|assignment|course|code|react|bug|interview|study|padhai|paper|college|class|test|marks|result|mid\s*sem|sem\b|semester/i.test(lower);
-  const hasEmotional = /anxiety|tension|ghar|family|sad|akela|lonely|stress|dar|darr|scared|kharab|mann nahi|ajeeb|worried|helpless|cry|rona|future|panic|overwhelm/i.test(lower);
+  const hasEmotional = /anxiety|anxious|tension|stress|stressed|ghar|family|sad|sadness|akela|lonely|dar|darr|scared|kharab|mann nahi|ajeeb|worried|worry|helpless|cry|rona|future|panic|overwhelm|overthinking|ghabrahat|nervous|pareshan|depress|upset|exhausted|tired|down|bura lag/i.test(lower);
+
   if (hasAcademic && hasEmotional) {
     return 'mixed';
+  }
+
+  // Pure emotional venting / stress / tension -> LISTEN MODE
+  if (hasEmotional && !hasAcademic) {
+    return 'listen';
   }
 
   // Think mode: decisions, dilemmas, career questions
@@ -35,13 +41,6 @@ export function detectConversationMode(text: string): ConversationMode {
     /explain like i'?m|simple language|b\.?tech|in hinglish|only the important points|point wise|easy words|samjha do|eli5|break ?down|simplify|layman/i.test(lower)
   ) {
     return 'explain';
-  }
-
-  // Listen mode: pure emotional sharing or venting
-  if (
-    /ajeeb din|yaad aa rahi|mood kharab|rona aa raha|bore ho raha|vent|can i tell you|kisi se baat|feeling down|just want to talk|need to talk|sunna|thak gaya|exhausted|overwhelmed|tension hoti hai|future ki|akela|scared|darr lag/i.test(lower)
-  ) {
-    return 'listen';
   }
 
   // Default to Ask mode for inquiries / facts / concepts / coding / knowledge
@@ -242,13 +241,14 @@ Batao, aaj kis cheez pe saath kaam karein?`;
 
   // ─── 2. EMOTIONAL SUPPORT & ANXIETY (PRD SECTION: LISTEN & MIXED) ──
 
-  // A) FUTURE & CAREER ANXIETY (Matches user's exact query: "bahot tension hoti hai future ki")
+  // A) GENERAL TENSION, STRESS, OVERWHELM & ANXIETY (e.g. "feeling completely in tension", "bohot tension ho rahi hai")
   if (
-    /future|career|placement|job|berozgar|aage kya hoga|unsuccessful|failure|darr lag raha hai future|tension hoti hai future ki/i.test(lower) ||
-    (lower.includes('tension') && lower.includes('future')) ||
-    (lower.includes('darr') && lower.includes('future'))
+    /tension|stress|stressed|anxious|anxiety|ghabrahat|nervous|pareshan|panic|overwhelmed|overwhelm|darr lag/i.test(lower) &&
+    !lower.includes('surface tension')
   ) {
-    return `Future ki tension hona bilkul natural hai yaar. Especially jab hum kisi aise phase mein hote hain jahan lagta hai ki har aane wala din aur har ek decision aage ki puri life decide karega... ye thought kisi ko bhi overwhelm kar sakti hai.
+    // Specific: Future anxiety
+    if (/future|career|placement|job|berozgar|aage kya hoga/i.test(lower)) {
+      return `Future ki tension hona bilkul natural hai yaar. Especially jab hum kisi aise phase mein hote hain jahan lagta hai ki har aane wala din aur har ek decision aage ki puri life decide karega... ye thought kisi ko bhi overwhelm kar sakti hai.
 
 Sach bataun toh, 90% future anxiety is baat se aati hai ki hum agle 5 saal ka bojha aaj ke ek din mein uthane ki koshish karne lagte hain. Par reality ye hai ki:
 - Future ek single din mein fix ya destroy nahi hota.
@@ -258,23 +258,47 @@ Sach bataun toh, 90% future anxiety is baat se aati hai ki hum agle 5 saal ka bo
 Jab future ko as a huge unknown pahaad dekhte hain, toh darr lagna lazmi hai. Par jab use aaj ke 1-2 practical steps mein todte hain, toh dimaag calm hone lagta hai.
 
 Sabse zyada kis cheez ka darr pareshan kar raha hai abhi — career aur placements ka, marks ya expectations ka, ya bas aage ka rasta clear nahi dikh raha? Bolo, main sun raha hoon.`;
-  }
+    }
 
-  // B) EXAM & MID-SEM / STUDY FEAR (Matches user's exact query: "mid sem aane waale hai aur bahot darr lag rha hai")
-  if (
-    /mid\s*sem|midsem|semester|end\s*sem|exam|paper|test|kuch yaad nahi|padhai nahi ho rahi|blank ho raha|syllabus khatam/i.test(lower) ||
-    (lower.includes('exam') && lower.includes('darr')) ||
-    (lower.includes('mid sem') && lower.includes('darr'))
-  ) {
-    return `Mid-sem aane par darr lagna bohot normal hai. Jab syllabus pahaad jaisa lage aur lagta ho ki "kuch yaad nahi reh raha", toh dimaag panic mode mein chala jata hai. Aur funny baat ye hai ki panic mein jo aata hai, dimaag wo bhi block kar deta hai.
+    // Specific: Mid-sem / Exam stress
+    if (/mid\s*sem|midsem|semester|end\s*sem|exam|paper|test|kuch yaad nahi|padhai|syllabus/i.test(lower)) {
+      return `Mid-sem aane par darr aur tension hona bohot normal hai. Jab syllabus pahaad jaisa lage aur lagta ho ki kuch yaad nahi reh raha, toh dimaag panic mode mein chala jata hai. Aur funny baat ye hai ki panic mein jo aata hai, dimaag wo bhi block kar deta hai.
 
 Is waqt sabse zaroori cheez hai — panic se nikal ke **smart triage mode** mein aana:
 
-1. **80/20 Rule lagao:** Pura 100% syllabus abhi cover karne ki zaroorat nahi hai. Mid-sems mein 70-80% marks sirf 2-3 high-weightage topics ya assignments se bante hain. Pehle sirf un core topics ko target karo.
+1. **80/20 Rule lagao:** Pura 100% syllabus abhi cover karne ki zaroorat nahi hai. Mid-sems mein 70-80% marks sirf 2-3 high-weightage topics se bante hain. Pehle sirf un core topics ko target karo.
 2. **40-Minute Focus Sprints:** Phone doosre room mein rakh do. 40 minute timer lagao, sirf ek single sub-topic padho, fir 5 minute break. Momentum se darr gayab hota hai.
-3. **Previous Year Questions (PYQs):** Mid-sem papers professors mostly past question patterns se hi frame karte hain. Unhe dekhoge toh darr aadha ho jayega.
+3. **Previous Year Questions (PYQs):** Mid-sem papers professors mostly past question patterns se hi frame karte hain.
 
-Ek exam tumhari worth ya capability define nahi karta. Abhi kaunsa subject sabse zyada tension de raha hai? Uska naam aur topic batao, hum saath mein uske key points sort out karte hain.`;
+Ek exam tumhari worth define nahi karta. Abhi kaunsa subject sabse zyada tension de raha hai? Uska naam aur topic batao, hum saath mein sort karte hain.`;
+    }
+
+    // General tension / feeling in tension
+    return `Tension mein hona bohot exhausting hota hai yaar — dimaag heavy lagne lagta hai aur body bhi physically drained mehsoos karti hai.
+
+Pehle bas ek gehri saans lo. Seriously — 4 second inhale karo aur 6 second dheere se release karo. Is waqt tumhe sab kuch ek saath theek karne ki koi jaldi nahi hai.
+
+Kya cheez sabse zyada load de rahi hai abhi? Koi specific baat hui hai (padhai, career, relationships, ya ghar ki baat), ya bas bina kisi specific wajah ke sab kuch achanak se dimaag par bhaari lag raha hai?
+
+Jo bhi ho, bina kisi filter ke bol sakte ho — main yahan hoon aur poori tarah sun raha hoon.`;
+  }
+
+  // B) SADNESS / FEELING DOWN / CRYING
+  if (/sad|feeling down|mood off|mood kharab|rona aa raha|crying|upset|dil bhaari|dil toot/i.test(lower)) {
+    return `Mann udaas hona ya ro dene ka mann karna bilkul human hai. Aise din aate hain jab sab theek chalte hue bhi andar se sab khali ya bhaari lagne lagta hai.
+
+Yahan kisi formality ki zaroorat nahi hai, aur na hi tumhe brave dikhne ki zaroorat hai. Jo bhi andar chal raha hai, use bahar aane do.
+
+Kya hua hai aaj? Koi baat chubh gayi, ya pichle kuch dinon ka stress ab achanak hit kar raha hai?`;
+  }
+
+  // C) CONFUSED / LOST / DIRECTIONLESS
+  if (/confused|lost hu|directionless|kuch samajh nahi aa raha|kya karun samajh nahi/i.test(lower)) {
+    return `Ye "lost" wali feeling bohot scary lag sakti hai, par actually ye ek sign hai ki tum abhi ek transition phase mein ho.
+
+Jab puraane tareeqe kaam nahi karte aur naya rasta abhi clear nahi dikhta, toh dimaag bilkul freeze ho jata hai. Par yaad rakhna: tumhe poori zindagi ka blueprint abhi nahi chahiye, bas agla ek chhota kadam chahiye.
+
+Kis cheez ko lekar sabse bada confusion hai abhi? Thoda detail batao, hum saath mein baith kar isko unpack karte hain.`;
   }
 
   // C) LONELINESS & OVERTHINKING
@@ -623,32 +647,29 @@ Jab do similar cheezon ko compare karte hain, toh 3 main parameters dekhe jaate 
 Kya specific terms batana chahoge jinhe detail tabular format mein compare karna hai?`;
   }
 
-  // ─── 7. ADAPTIVE CONVERSATIONAL FALLBACK (NEVER DEFLECTS) ───────────
-  // Thoughtful, human, empathetic response tailored to context
+  // ─── 7. ADAPTIVE CONVERSATIONAL FALLBACK ───────────────────────────
   if (mode === 'listen') {
-    return `Main sun raha hoon. Aise moments aate hain jab sab kuch andar se heavy lagne lagta hai aur kisi formality ki zaroorat nahi hoti.
+    return `Main poori tarah sun raha hoon. Aise moments mein jab mann bhaari ya bechain ho, toh kisi formality ya unsolicited advice ki zaroorat nahi hoti.
 
-Jo mann mein hai, bindaas bol sakte ho — bina filter ke. Main yahan hoon, bolo kya chal raha hai?`;
+Jo bhi mann mein chal raha hai, bindaas express karo — yahan zero judgment hai. Main sun raha hoon, bolo kya baat hai?`;
   }
 
   if (mode === 'think') {
-    return `Ye important decision lagta hai, aur aise matters mein jaldbazi mein react karne ke bajaye thoda pause lena chahiye.
+    return `Ye decision kaafi important lagta hai, aur aise matters mein pause lena hi sabse smart move hota hai.
 
-Sabse pehle batao, tumhare dimaag mein sabse bada fear ya confusion kya hai is baare mein? Wahan se hum milke trade-offs evaluate karte hain.`;
+Tumhare dimaag mein sabse bada doubt ya darr kya hai is decision ko lekar? Wahan se hum milke iske pros aur cons evaluate karte hain.`;
   }
 
   if (mode === 'mixed') {
-    return `Lag raha hai do cheezein ek saath chal rahi hain — ek practical responsibility aur upar se personal mental pressure bhi. Dono bilkul valid hain.
+    return `Lag raha hai ek taraf practical zimmedari hai aur doosri taraf andar ka mental stress bhi. Dono baatein bilkul real hain.
 
-Pehle thoda sa mann halka karna chahte ho, ya seedha practical problem tackle karein? Jo comfortable lage wahan se aage badhte hain.`;
+Kya pehle thoda mann halka karna chahte ho baat karke, ya seedha practical problem solve karein? Jaisa tum comfortable feel karo, wahan se shuru karte hain.`;
   }
 
-  // Substantive general response that actually engages the user's thought
+  // Thoughtful, warm natural conversational response
   return `Maine tumhari baat dhyan se samjhi.
 
-Ye ek thought-provoking topic hai. Isko agar hum right perspective se dekhein, toh isme practical clarity aur core understanding dono zaroori hain.
-
-Tum is baare mein kis direction se sochna chahte ho — kya koi practical issue solve karna hai, conceptual clarity chahiye, ya bas iske alag-alag aspects explore karne hain? Batao, main poori tarah se ready hoon.`;
+Is baare mein thoda aur share karna chahoge? Chahe koi doubt clear karna ho, kisi concept ko simple bhasha mein samajhna ho, ya bas apna thought process discuss karna ho — main bilkul yahan hoon.`;
 }
 
 export class InferenceEngine {
