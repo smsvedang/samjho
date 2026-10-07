@@ -213,8 +213,15 @@ function generateLocalCompanionResponse(
     return generateAttachmentResponse(userText, attachments, mode, history);
   }
 
-  // Live web knowledge fallback
+  // Live multi-source web knowledge fallback
   if (webResult) {
+    if (webResult.sources && webResult.sources.length > 0) {
+      let out = `Maine internet par different sources se check kiya:\n\n`;
+      for (const s of webResult.sources) {
+        out += `### ${s.title}\n${s.snippet}\n🔗 **Source:** [${s.url}](${s.url})\n\n`;
+      }
+      return out.trim();
+    }
     let out = `## ${webResult.title || 'Live Information'}\n\n${webResult.snippet}`;
     if (webResult.sourceUrl) {
       out += `\n\n🔗 **Source:** [${webResult.sourceUrl}](${webResult.sourceUrl})`;
@@ -825,7 +832,8 @@ export class InferenceEngine {
   public async generateResponse(
     userText: string,
     onChunk: (chunk: string, fullText: string) => void,
-    attachments?: FileAttachment[]
+    attachments?: FileAttachment[],
+    onStatus?: (status: string) => void
   ): Promise<{ text: string; mode: ConversationMode }> {
     this.abortController = new AbortController();
     const mode = detectConversationMode(userText);
@@ -844,17 +852,19 @@ export class InferenceEngine {
       return { text: intervention, mode };
     }
 
-    // 2. Real-Time Web Knowledge & Live Website Extraction (RAG)
+    // 2. Real-Time Multi-Source Web Knowledge & Website Extraction (RAG)
     let webResult: WebSearchResult | null = null;
     let webContext: string | undefined = undefined;
     try {
-      webResult = await detectAndFetchWebContext(userText, this.abortController.signal);
+      webResult = await detectAndFetchWebContext(userText, this.abortController.signal, onStatus);
       if (webResult) {
         webContext = formatWebContextForPrompt(webResult);
       }
     } catch (e) {
       console.warn('[Samjho Web] Extraction failed:', e);
     }
+
+    onStatus?.('✨ Generating answer...');
 
     // 3. User-Configured High-Power Cloud LLMs (Groq, Gemini, OpenAI)
     if (settings.provider === 'groq' && settings.groqApiKey) {

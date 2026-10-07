@@ -33,6 +33,7 @@ export interface ChatMessage {
   timestamp: number;
   mode?: ConversationMode;
   isStreaming?: boolean;
+  statusText?: string;
   isError?: boolean;
   helplines?: HelplineInfo[];
   attachments?: FileAttachment[];

@@ -51,16 +51,25 @@ export class ResponseController {
       timestamp: Date.now(),
       isStreaming: true,
       mode: 'ask',
+      statusText: 'Samjho is thinking...',
     };
+
+    // Immediately push assistant message with thinking status so the chat is NEVER blank
+    onProgress?.({ ...assistantMessage });
 
     try {
       const result = await inferenceEngine.generateResponse(
         text,
         (_chunk, fullText) => {
           assistantMessage.text = fullText;
+          assistantMessage.statusText = undefined;
           onProgress?.({ ...assistantMessage });
         },
-        attachments
+        attachments,
+        (status) => {
+          assistantMessage.statusText = status;
+          onProgress?.({ ...assistantMessage });
+        }
       );
 
       assistantMessage.text = result.text;

@@ -318,11 +318,40 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
       {/* Message Body */}
       <div className="max-w-[95%] sm:max-w-[85%] bg-white dark:bg-surface-darkCard border border-neutral-200/70 dark:border-neutral-800/80 rounded-2xl rounded-tl-xs px-5 py-4 shadow-soft text-neutral-800 dark:text-neutral-200 text-sm sm:text-base">
-        {renderFormattedText(message.text)}
+        {message.isStreaming && (!message.text || message.text.trim().length === 0) ? (
+          <div className="flex items-center gap-3.5 py-1.5 animate-fade-in">
+            {/* Pulsing Beacon with Glowing Halo */}
+            <div className="relative flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-tr from-samjho-600 via-indigo-600 to-purple-600 text-white shadow-md">
+              <span className="text-sm font-bold">☼</span>
+              <span className="absolute inset-0 rounded-xl bg-samjho-400/40 animate-ping" />
+            </div>
 
-        {/* Streaming Cursor */}
-        {message.isStreaming && (
-          <span className="inline-block w-1.5 h-4 ml-1 bg-samjho-500 animate-pulse align-middle" />
+            {/* Dynamic Status & Bouncing Dots Animation */}
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-semibold bg-gradient-to-r from-samjho-600 via-indigo-600 to-purple-600 dark:from-samjho-400 dark:via-indigo-300 dark:to-purple-300 bg-clip-text text-transparent">
+                  {message.statusText || 'Samjho is thinking & finding information...'}
+                </span>
+                <span className="inline-flex gap-1 items-center">
+                  <span className="w-1.5 h-1.5 rounded-full bg-samjho-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                </span>
+              </div>
+              <p className="text-[11px] text-neutral-400 dark:text-neutral-500">
+                Searching multiple websites & scraping relevant data
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {renderFormattedText(message.text)}
+
+            {/* Streaming Cursor */}
+            {message.isStreaming && (
+              <span className="inline-block w-1.5 h-4 ml-1 bg-samjho-500 animate-pulse align-middle" />
+            )}
+          </>
         )}
 
         {/* Crisis / Safety Helpline Card Embed (PRD Section 24) */}

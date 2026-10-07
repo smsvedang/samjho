@@ -68,7 +68,7 @@ export async function streamPollinationsAI(
   signal?: AbortSignal
 ): Promise<string> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout for fast responsiveness
 
   const onAbort = () => controller.abort();
   if (signal) signal.addEventListener('abort', onAbort);
@@ -80,7 +80,7 @@ export async function streamPollinationsAI(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'openai-fast',
+        model: 'openai',
         messages,
         temperature: 0.7,
         stream: true,
@@ -91,16 +91,53 @@ export async function streamPollinationsAI(
     clearTimeout(timeoutId);
     if (signal) signal.removeEventListener('abort', onAbort);
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Universal AI endpoint error (${res.status}): ${errText}`);
+    if (res.ok) {
+      return await readOpenAIStream(res, onChunk, signal);
     }
-
-    return await readOpenAIStream(res, onChunk, signal);
   } catch (err: any) {
     clearTimeout(timeoutId);
     if (signal) signal.removeEventListener('abort', onAbort);
-    throw err;
+    console.warn('[SSE Pollinations stream attempt failed, switching to direct]:', err?.message);
+  }
+
+  // Fast resilient fallback: Direct Pollinations POST
+  const fallbackController = new AbortController();
+  const fbTimeout = setTimeout(() => fallbackController.abort(), 12000);
+  if (signal) signal.addEventListener('abort', () => fallbackController.abort());
+
+  try {
+    const res2 = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages }),
+      signal: fallbackController.signal,
+    });
+    clearTimeout(fbTimeout);
+
+    if (!res2.ok) {
+      throw new Error(`Direct AI endpoint error (${res2.status})`);
+    }
+
+    const fullText = await res2.text();
+    if (!fullText || fullText.trim().length === 0) {
+      throw new Error('Empty AI response');
+    }
+
+    // Stream out words naturally
+    const words = fullText.split(/(\s+)/);
+    let accumulated = '';
+    for (let i = 0; i < words.length; i++) {
+      if (signal?.aborted) break;
+      accumulated += words[i];
+      onChunk(words[i], accumulated);
+      if (i % 2 === 0) {
+        await new Promise(r => setTimeout(r, 8));
+      }
+    }
+    return accumulated;
+  } catch (err2: any) {
+    clearTimeout(fbTimeout);
+    throw err2;
   }
 }
 
