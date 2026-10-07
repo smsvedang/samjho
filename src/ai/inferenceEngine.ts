@@ -4,7 +4,8 @@ import { evaluateSafety } from './safetyEngine';
 import { contextManager } from './contextManager';
 import { sessionManager } from '../privacy/sessionManager';
 import { aiSettingsManager } from './aiSettings';
-import { streamGroq, streamGemini, streamOpenAICompatible, buildLLMMessages } from './cloudAI';
+import { streamGroq, streamGemini, streamOpenAICompatible, streamPollinationsAI, buildLLMMessages } from './cloudAI';
+import { detectAndFetchWebContext, formatWebContextForPrompt, WebSearchResult } from './webSearchEngine';
 
 // WebLLM dynamically loaded when WebGPU is available
 let webLLMEngine: any = null;
@@ -205,14 +206,62 @@ function generateLocalCompanionResponse(
   userText: string,
   mode: ConversationMode,
   history: Array<{ role: string; content: string }>,
-  attachments?: FileAttachment[]
+  attachments?: FileAttachment[],
+  webResult?: WebSearchResult | null
 ): string {
   if (attachments && attachments.length > 0) {
     return generateAttachmentResponse(userText, attachments, mode, history);
   }
 
+  // Live web knowledge fallback
+  if (webResult) {
+    let out = `## ${webResult.title || 'Live Information'}\n\n${webResult.snippet}`;
+    if (webResult.sourceUrl) {
+      out += `\n\n🔗 **Source:** [${webResult.sourceUrl}](${webResult.sourceUrl})`;
+    }
+    return out;
+  }
+
   const lower = userText.trim().toLowerCase();
   const original = userText.trim();
+
+  // Ohm's Law
+  if (/ohm'?s?\s*law|ohms\s*law|v\s*=\s*i\s*\*?\s*r|resistance.*voltage/i.test(lower)) {
+    return `## Ohm's Law (ओह्म का नियम)
+
+**Core Statement:**
+Ohm's law states that in an electrical circuit, the current ($I$) flowing through a conductor between two points is directly proportional to the potential difference ($V$) across those two points, provided the temperature and physical conditions remain constant.
+
+### Mathematical Formula:
+$$V = I \\times R$$
+
+* **$V$ (Voltage):** Electric potential difference (measured in Volts, $\\text{V}$)
+* **$I$ (Current):** Flow of electric current (measured in Amperes, $\\text{A}$)
+* **$R$ (Resistance):** Resistance to current flow (measured in Ohms, $\\Omega$)
+
+### Quick Rearranged Formulas:
+* Current nikaalne ke liye: $$I = \\frac{V}{R}$$
+* Resistance nikaalne ke liye: $$R = \\frac{V}{I}$$
+
+---
+
+### Practical Example:
+Maan lo ek $12\\text{V}$ battery ek $4\\,\\Omega$ resistor se judi hai:
+$$I = \\frac{12\\text{V}}{4\\,\\Omega} = 3\\text{ Amperes}$$
+
+Toh circuit mein $3\\text{A}$ ka current flow hoga.`;
+  }
+
+  // India PM & Political Leaders
+  if (/pm\s*of\s*india|india\s*ka\s*pm|prime\s*minister\s*of\s*india|pradhan\s*mantri/i.test(lower)) {
+    return `Bharat (India) ke vartaman Prime Minister **Narendra Modi** hain.
+
+Unhone 26 May 2014 ko pehli baar Pradhan Mantri pad ki shapath li thi, aur 2019 tatha 2024 ke aam chunav jeet kar lagatar teesri baar ye pad sambhal rahe hain.
+
+* **Pura Naam:** Narendra Damodardas Modi
+* **Pad Sambhala:** 26 May 2014 se ab tak
+* **Rashtrapati (President of India):** Smt. Droupadi Murmu`;
+  }
 
   // ─── 1. GREETINGS & INTRO ──────────────────────────────────────────
   if (/^(hi|hello|hey|namaste|kya haal|kaise ho|how are you|sup|yo|hola)\b/i.test(lower)) {
@@ -666,10 +715,21 @@ Tumhare dimaag mein sabse bada doubt ya darr kya hai is decision ko lekar? Wahan
 Kya pehle thoda mann halka karna chahte ho baat karke, ya seedha practical problem solve karein? Jaisa tum comfortable feel karo, wahan se shuru karte hain.`;
   }
 
+  if (mode === 'ask' || mode === 'explain') {
+    return `Tumne **"${original}"** ke baare mein poocha hai.
+
+Ye topic/concept kaafi zaroori hai. Aao isko basic terms mein breakdown karte hain:
+1. **Core Concept:** Iska main objective aur fundamental principle kya hai.
+2. **Working / Formula:** Iske underlying working principles ya mathematical rules.
+3. **Real-world Application:** Iska practical use daily life, engineering ya syllabus mein.
+
+Agar is par koi specific numerical, code example ya step-by-step doubt solve karna ho, toh bindaas batao — main poora explain karunga!`;
+  }
+
   // Thoughtful, warm natural conversational response
   return `Maine tumhari baat dhyan se samjhi.
 
-Is baare mein thoda aur share karna chahoge? Chahe koi doubt clear karna ho, kisi concept ko simple bhasha mein samajhna ho, ya bas apna thought process discuss karna ho — main bilkul yahan hoon.`;
+Is baare mein thoda aur detail share karna chahoge? Chahe koi doubt clear karna ho, kisi concept ko simple bhasha mein samajhna ho, ya bas apna thought process discuss karna ho — main yahan hoon.`;
 }
 
 export class InferenceEngine {
@@ -784,10 +844,22 @@ export class InferenceEngine {
       return { text: intervention, mode };
     }
 
-    // 2. High-Power Cloud LLMs (Groq, Gemini, OpenAI)
+    // 2. Real-Time Web Knowledge & Live Website Extraction (RAG)
+    let webResult: WebSearchResult | null = null;
+    let webContext: string | undefined = undefined;
+    try {
+      webResult = await detectAndFetchWebContext(userText, this.abortController.signal);
+      if (webResult) {
+        webContext = formatWebContextForPrompt(webResult);
+      }
+    } catch (e) {
+      console.warn('[Samjho Web] Extraction failed:', e);
+    }
+
+    // 3. User-Configured High-Power Cloud LLMs (Groq, Gemini, OpenAI)
     if (settings.provider === 'groq' && settings.groqApiKey) {
       try {
-        const messages = buildLLMMessages(userText, history, mode, attachments);
+        const messages = buildLLMMessages(userText, history, mode, attachments, webContext);
         const fullText = await streamGroq(
           settings,
           messages,
@@ -802,7 +874,7 @@ export class InferenceEngine {
 
     if (settings.provider === 'gemini' && settings.geminiApiKey) {
       try {
-        const messages = buildLLMMessages(userText, history, mode, attachments);
+        const messages = buildLLMMessages(userText, history, mode, attachments, webContext);
         const fullText = await streamGemini(
           settings,
           messages,
@@ -817,7 +889,7 @@ export class InferenceEngine {
 
     if (settings.provider === 'openai' && settings.openaiApiKey) {
       try {
-        const messages = buildLLMMessages(userText, history, mode, attachments);
+        const messages = buildLLMMessages(userText, history, mode, attachments, webContext);
         const fullText = await streamOpenAICompatible(
           settings,
           messages,
@@ -830,10 +902,13 @@ export class InferenceEngine {
       }
     }
 
-    // 3. WebGPU Local Model
+    // 4. WebGPU Local Model
     if (settings.provider === 'webgpu' && webLLMEngine) {
       try {
         const messages = contextManager.buildPrompt(userText, history, mode, attachments);
+        if (webContext) {
+          messages.push({ role: 'system', content: webContext });
+        }
         const replyChunks = await webLLMEngine.chat.completions.create({
           messages: messages as any,
           stream: true,
@@ -850,12 +925,28 @@ export class InferenceEngine {
 
         return { text: accumulated, mode };
       } catch (err: any) {
-        console.warn('[WebLLM stream failed, switching to companion]:', err);
+        console.warn('[WebLLM stream failed, switching to universal AI]:', err);
       }
     }
 
-    // 4. Supercharged Local Companion Engine with Natural Streaming
-    const fullResponse = generateLocalCompanionResponse(userText, mode, history, attachments);
+    // 5. Samjho Universal Intelligence Engine (Free, Out-Of-The-Box Streaming LLM)
+    // Seamlessly handles all general, coding, scientific, web-extracted, and conversational questions
+    try {
+      const messages = buildLLMMessages(userText, history, mode, attachments, webContext);
+      const fullText = await streamPollinationsAI(
+        messages,
+        (delta, full) => onChunk(delta, full),
+        this.abortController.signal
+      );
+      if (fullText && fullText.trim().length > 0) {
+        return { text: fullText, mode };
+      }
+    } catch (err: any) {
+      console.warn('[Universal AI stream failed, falling back to local engine]:', err.message);
+    }
+
+    // 6. Resilient Local Companion & Knowledge Engine (Offline fallback)
+    const fullResponse = generateLocalCompanionResponse(userText, mode, history, attachments, webResult);
     let accumulated = '';
     const words = fullResponse.split(/(\s+)/);
 

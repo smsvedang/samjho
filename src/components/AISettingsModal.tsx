@@ -94,17 +94,17 @@ export const AISettingsModal: React.FC<AISettingsModalProps> = ({
               <div className="flex-1">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Cpu className="w-4 h-4 text-emerald-500" />
+                    <Sparkles className="w-4 h-4 text-emerald-500" />
                     <span className="font-semibold text-sm text-neutral-900 dark:text-neutral-100">
-                      Smart Local Companion (Default)
+                      Samjho Universal AI (Default — Free & Ready)
                     </span>
                   </div>
                   <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
-                    🛡️ 100% Offline & Private
+                    ✨ All Q&A + Web Ready
                   </span>
                 </div>
                 <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-                  <strong>Zero data leaves your device.</strong> Completely private, anonymous, and works without sending any chat data over the internet.
+                  Answers <strong>all questions</strong> (science, math, coding, GK, facts) like ChatGPT & Gemini. Live web search and URL content extraction included — <strong>no API key or login required</strong>.
                 </p>
               </div>
             </div>

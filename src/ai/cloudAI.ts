@@ -8,16 +8,18 @@ export function buildLLMMessages(
   userText: string,
   history: ContextItem[],
   mode: ConversationMode,
-  attachments?: FileAttachment[]
+  attachments?: FileAttachment[],
+  webContext?: string
 ): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
   let systemPrompt = SAMJHO_SYSTEM_PROMPT;
   systemPrompt += `\n\nCurrent detected conversation mode: ${mode.toUpperCase()}.
 Remember your core guidelines:
-- Be a warm, empathetic, non-judgmental friend (Samjho).
+- Be an intelligent, versatile, warm, and empathetic AI companion (Samjho).
+- Answer ALL scientific, academic, technical, math, coding, and general questions directly with accurate facts and depth.
+- If live web search data or extracted webpage content is provided below, leverage it to provide an accurate, up-to-date answer.
 - Reply naturally in the same language as the user (natural Hinglish when addressed in Hinglish, English when in English).
-- Validate feelings genuinely before problem-solving.
-- Never use robotic menus or numbered selection choices like 'Option 1, Option 2'.
-- Keep conversational answers natural, balanced, and comforting.`;
+- Validate feelings genuinely when the user is stressed or emotional.
+- Never use robotic menus or numbered selection choices like 'Option 1, Option 2'.`;
 
   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
     { role: 'system', content: systemPrompt }
@@ -47,8 +49,59 @@ Remember your core guidelines:
     userContent += '\n]';
   }
 
+  // Include live web context if present
+  if (webContext && webContext.trim().length > 0) {
+    userContent += `\n\n${webContext.trim()}`;
+  }
+
   messages.push({ role: 'user', content: userContent });
   return messages;
+}
+
+/**
+ * Streams response from Samjho Universal Free AI (Pollinations AI)
+ * No API key required out of the box. Answers all questions, coding, math, GK, Hinglish, etc.
+ */
+export async function streamPollinationsAI(
+  messages: Array<{ role: string; content: string }>,
+  onChunk: (delta: string, full: string) => void,
+  signal?: AbortSignal
+): Promise<string> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
+
+  const onAbort = () => controller.abort();
+  if (signal) signal.addEventListener('abort', onAbort);
+
+  try {
+    const res = await fetch('https://text.pollinations.ai/openai/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'openai-fast',
+        messages,
+        temperature: 0.7,
+        stream: true,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    if (signal) signal.removeEventListener('abort', onAbort);
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Universal AI endpoint error (${res.status}): ${errText}`);
+    }
+
+    return await readOpenAIStream(res, onChunk, signal);
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (signal) signal.removeEventListener('abort', onAbort);
+    throw err;
+  }
 }
 
 /**

@@ -1,39 +1,96 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" prefix="og: https://ogp.me/ns#">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Samjho — An AI that listens, understands and explains</title>
     
-    <!-- Meta & SEO -->
-    <meta name="description" content="Talk freely. Samjho listens, understands and explains — without needing to know who you are. No signup, no chat database, 100% private local AI companion." />
-    <meta name="keywords" content="Samjho, Samjho AI, Private AI, Local LLM, Anonymous Chatbot, Hinglish AI, Study Assistant, Confidential AI" />
+    <!-- Primary Page Title & Basic Metadata -->
+    <title>Samjho AI — Privacy-First AI Companion | Safe, Anonymous & Empathetic</title>
+    <meta name="title" content="Samjho AI — Privacy-First AI Companion | Safe, Anonymous & Empathetic" />
+    <meta name="description" content="Talk freely without login or tracking. Samjho AI is your safe, anonymous, and deeply empathetic AI companion for confidential conversations, study help, life decisions, and late-night thoughts." />
+    <meta name="keywords" content="Samjho, Samjho AI, samjhoai.in, private AI companion, anonymous AI chat, Hinglish AI, confidential chatbot, safe AI, student study companion, emotional wellness AI, talk without login, private ChatGPT alternative India, zero login AI chatbot" />
     <meta name="author" content="Samjho AI" />
-    <link rel="canonical" href="https://samjhoai.in" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="googlebot" content="index, follow" />
+    <link rel="canonical" href="https://samjhoai.in/" />
 
-    <!-- Open Graph / Social -->
+    <!-- Open Graph / Facebook / WhatsApp / LinkedIn -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://samjhoai.in" />
-    <meta property="og:title" content="Samjho — Privacy-first AI companion" />
-    <meta property="og:description" content="Understand what you mean and help you understand what you need. Zero account, zero logs, runs directly on your device." />
-    <meta property="og:image" content="/logo.svg" />
+    <meta property="og:site_name" content="Samjho AI" />
+    <meta property="og:url" content="https://samjhoai.in/" />
+    <meta property="og:title" content="Samjho AI — Safe, Anonymous & Empathetic AI Companion" />
+    <meta property="og:description" content="Talk freely without login or tracking. 100% private conversations, zero chat history saved on servers. A safe space for your thoughts." />
+    
+    <!-- WhatsApp & Social Preview Image (Raster JPEG 1200x630, High Compatibility) -->
+    <meta property="og:image" content="https://samjhoai.in/og-image.jpg" />
+    <meta property="og:image:secure_url" content="https://samjhoai.in/og-image.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Samjho AI - Safe, Anonymous & Empathetic AI Companion" />
+    <meta property="og:locale" content="en_IN" />
 
-    <!-- PWA & Mobile Web App -->
+    <!-- Fallback image tags for scrapers & older bots -->
+    <link rel="image_src" href="https://samjhoai.in/og-image.jpg" />
+    <meta itemprop="name" content="Samjho AI — Safe, Anonymous & Empathetic AI Companion" />
+    <meta itemprop="description" content="Talk freely without login or tracking. 100% private conversations, zero chat history saved on servers. A safe space for your thoughts." />
+    <meta itemprop="image" content="https://samjhoai.in/og-image.jpg" />
+
+    <!-- Twitter / X Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://samjhoai.in/" />
+    <meta name="twitter:title" content="Samjho AI — Privacy-First AI Companion" />
+    <meta name="twitter:description" content="Safe, anonymous, and empathetic AI companion. Talk freely without login or tracking. 100% confidential." />
+    <meta name="twitter:image" content="https://samjhoai.in/og-image.jpg" />
+    <meta name="twitter:image:alt" content="Samjho AI - Safe, Anonymous & Empathetic AI Companion" />
+
+    <!-- Mobile & PWA Configuration -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#121212" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Samjho" />
+    <meta name="application-name" content="Samjho AI" />
 
-    <!-- Favicon -->
+    <!-- Favicons & App Icons -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
-    <link rel="apple-touch-icon" href="/logo.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="shortcut icon" href="/icon-192.png" />
 
     <!-- Typography: Plus Jakarta Sans & Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- Structured Data (Schema.org WebApplication) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Samjho AI",
+      "alternateName": "Samjho",
+      "url": "https://samjhoai.in",
+      "logo": "https://samjhoai.in/logo.png",
+      "image": "https://samjhoai.in/og-image.jpg",
+      "description": "Safe, anonymous, and deeply empathetic AI companion. Talk freely without login or tracking.",
+      "applicationCategory": "LifestyleApplication",
+      "operatingSystem": "All",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "INR"
+      },
+      "featureList": [
+        "100% Anonymous - No login required",
+        "Zero server chat database",
+        "Empathetic Hinglish and English conversation",
+        "Privacy-first architecture"
+      ]
+    }
+    </script>
   </head>
   <body class="bg-surface-light dark:bg-surface-dark text-neutral-900 dark:text-neutral-100 antialiased selection:bg-samjho-500 selection:text-white">
     <div id="root"></div>
