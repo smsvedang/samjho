@@ -31,6 +31,18 @@ export const App: React.FC = () => {
 
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
+  // Clean legacy WebGPU storage settings
+  useEffect(() => {
+    try {
+      localStorage.removeItem('samjho_ai_settings_v1');
+      localStorage.removeItem('samjho_ai_settings_v2');
+      const v3 = localStorage.getItem('samjho_ai_settings_v3');
+      if (v3 && v3.includes('webgpu')) {
+        localStorage.removeItem('samjho_ai_settings_v3');
+      }
+    } catch {}
+  }, []);
+
   // Sync theme with document class
   useEffect(() => {
     const root = document.documentElement;

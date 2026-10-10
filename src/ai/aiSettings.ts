@@ -1,6 +1,6 @@
 import { AISettings, EngineProvider } from '../types';
 
-const SETTINGS_STORAGE_KEY = 'samjho_ai_settings_v2';
+const SETTINGS_STORAGE_KEY = 'samjho_ai_settings_v3';
 
 const DEFAULT_SETTINGS: AISettings = {
   provider: 'instant',
@@ -13,18 +13,24 @@ class AISettingsManager {
 
   constructor() {
     this.settings = this.loadSettings();
+    if (this.settings.provider === 'webgpu') {
+      this.settings.provider = 'instant';
+    }
   }
 
   private loadSettings(): AISettings {
     if (typeof window === 'undefined') return { ...DEFAULT_SETTINGS };
 
     try {
+      localStorage.removeItem('samjho_ai_settings_v1');
+      localStorage.removeItem('samjho_ai_settings_v2');
       const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
+        const provider = parsed.provider === 'webgpu' ? 'instant' : (parsed.provider || 'instant');
         return {
           ...DEFAULT_SETTINGS,
-          provider: parsed.provider || 'instant',
+          provider,
           externalWebSearchEnabled: parsed.externalWebSearchEnabled === true,
           groqApiKey: parsed.groqApiKey,
           geminiApiKey: parsed.geminiApiKey,

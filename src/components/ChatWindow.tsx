@@ -6,6 +6,7 @@ import { PrivacyBadge } from './PrivacyBadge';
 import { responseController } from '../ai/responseController';
 import { clearAllLocalConversationData } from '../privacy/dataClear';
 import { inferenceEngine } from '../ai/inferenceEngine';
+import { aiSettingsManager } from '../ai/aiSettings';
 import {
   Trash2,
   Plus,
@@ -38,6 +39,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    // Ensure the conversation is always in Instant Zero-Download mode
+    if (aiSettingsManager.getSettings().provider === 'webgpu') {
+      aiSettingsManager.setProvider('instant');
+    }
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
