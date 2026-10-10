@@ -1,15 +1,11 @@
-import { ConversationMode, FileAttachment, EngineProvider } from '../types';
+import { ConversationMode, FileAttachment } from '../types';
 import { modelManager } from './modelManager';
 import { evaluateSafety } from './safetyEngine';
 import { contextManager } from './contextManager';
 import { sessionManager } from '../privacy/sessionManager';
 import { aiSettingsManager } from './aiSettings';
-import { streamGroq, streamGemini, streamOpenAICompatible, streamPollinationsAI, buildLLMMessages } from './cloudAI';
 import { detectAndFetchWebContext, formatWebContextForPrompt, WebSearchResult } from './webSearchEngine';
-
-// WebLLM dynamically loaded when WebGPU is available
-let webLLMEngine: any = null;
-let isWebLLMLoading = false;
+import type { MLCEngine } from '@mlc-ai/web-llm';
 
 /**
  * Detects the conversational mode from the user's message and context
@@ -280,13 +276,13 @@ Batao, aaj mann mein kya chal raha hai?`;
   }
 
   if (/who (are|r) (you|u)|kaun ho|apna intro|what is samjho|kya hai samjho|about yourself/i.test(lower)) {
-    return `Main **Samjho** hoon — ek safe, thoughtful companion jo tumhare device par locally kaam karta hai. Mera naam "samajhna" se aaya hai.
+    return `Main **Samjho** hoon — ek safe, thoughtful companion. Mera naam "samajhna" se aaya hai.
 
 **Main tumhari help kaise karta hoon:**
 - 🧠 **Decisions & Dilemmas:** Career, study paths, aur life choices ko sort karna
 - 📚 **Concepts & Doubts:** Physics, Math, Code, AI ya koi bhi subject simple bhasha mein todna
 - 💬 **Empathy & Listening:** Jab darr, anxiety, ya overthinking ho rahi ho aur kisi se bina filter baat karni ho
-- ⚡ **Zero Judgment & Privacy:** Tumhari baatein device se bahar nahi jati.
+- ⚡ **Zero Judgment:** Tum yahan bina judgment ke baat kar sakte ho.
 
 Batao, aaj kis cheez pe saath kaam karein?`;
   }
@@ -475,7 +471,7 @@ fetchData()
 \`\`\`js
 async function getData() {
   try {
-    const res = await fetch('https://api.example.com/data');
+    const res = await fetchData();
     const data = await res.json();
     console.log(data);
   } catch (err) {
@@ -741,46 +737,45 @@ Is baare mein thoda aur detail share karna chahoge? Chahe koi doubt clear karna 
 
 export class InferenceEngine {
   private abortController: AbortController | null = null;
+  private interruptPromise: Promise<void> | null = null;
+  private webLLMEngine: MLCEngine | null = null;
+  private isWebLLMLoading = false;
 
   /**
-   * Initializes the browser local LLM engine via WebGPU if hardware supports it.
+   * Downloads model artifacts and initializes local WebGPU inference when supported.
    */
   public async initWebLLM(): Promise<void> {
-    const caps = await modelManager.detectCapabilities();
-    const settings = aiSettingsManager.getSettings();
-
-    // If user has an active cloud provider selected, don't force WebGPU download
-    if (['groq', 'gemini', 'openai'].includes(settings.provider)) {
-      modelManager.updateState({
-        stage: 'ready',
-        progress: 100,
-        statusText: `Ready with ${settings.provider.toUpperCase()}`,
-        activeEngine: settings.provider,
-      });
-      return;
-    }
-
-    if (!caps.hasWebGPU) {
-      modelManager.updateState({
-        stage: 'ready',
-        progress: 100,
-        statusText: 'Samjho is ready',
-        activeEngine: 'local-companion',
-      });
-      return;
-    }
+    if (this.webLLMEngine || this.isWebLLMLoading) return;
+    this.isWebLLMLoading = true;
 
     modelManager.updateState({
-      stage: 'ready',
-      progress: 100,
-      statusText: 'Samjho is ready',
-      activeEngine: settings.provider || 'local-companion',
+      stage: 'detecting',
+      progress: 0,
+      statusText: 'Checking local WebGPU support...',
+      activeEngine: 'webgpu',
     });
 
-    if (webLLMEngine || isWebLLMLoading) return;
-
     try {
-      isWebLLMLoading = true;
+      const caps = await modelManager.detectCapabilities();
+      if (!caps.hasWebGPU) {
+        modelManager.updateState({
+          stage: 'unsupported',
+          progress: 0,
+          statusText: 'This browser or device does not support WebGPU. Local AI is unavailable here.',
+          activeEngine: 'webgpu',
+          modelName: 'WebGPU unavailable',
+        });
+        return;
+      }
+
+      modelManager.updateState({
+        stage: 'downloading',
+        progress: 0,
+        statusText: 'Preparing the on-device model download. Model files are separate from your messages.',
+        activeEngine: 'webgpu',
+        modelName: caps.recommendedModelId,
+      });
+
       const webllm = await import('@mlc-ai/web-llm');
       const modelId = caps.recommendedModelId;
 
@@ -794,36 +789,92 @@ export class InferenceEngine {
         },
       });
 
-      webLLMEngine = engine;
-      isWebLLMLoading = false;
-
+      this.webLLMEngine = engine;
       modelManager.updateState({
         stage: 'ready',
         progress: 100,
-        statusText: 'WebGPU Engine Ready',
+        statusText: 'On-device WebGPU model ready.',
         activeEngine: 'webgpu',
         modelName: modelId,
       });
     } catch (err: any) {
-      console.warn('[Samjho] WebGPU initialization fallback to local companion:', err?.message);
-      isWebLLMLoading = false;
+      console.error('[Samjho] On-device WebGPU model initialization failed:', err);
       modelManager.updateState({
-        stage: 'ready',
-        progress: 100,
-        statusText: 'Samjho is ready',
-        activeEngine: 'local-companion',
+        stage: 'error',
+        progress: 0,
+        statusText: 'The on-device model could not be loaded. No hosted AI fallback was used.',
+        activeEngine: 'webgpu',
+        error: err instanceof Error ? err.message : 'Unknown model loading error',
       });
+    } finally {
+      this.isWebLLMLoading = false;
     }
   }
 
   /**
-   * Aborts currently running token generation
+   * Interrupts generation without switching to another inference provider.
    */
   public abortGeneration(): void {
     if (this.abortController) {
       this.abortController.abort();
       this.abortController = null;
     }
+
+    if (this.webLLMEngine) {
+      this.interruptPromise = this.webLLMEngine.interruptGenerate().catch((err) => {
+        console.warn('[Samjho] Could not interrupt WebLLM generation:', err);
+      });
+    }
+  }
+
+  public async resetConversation(): Promise<void> {
+    if (this.abortController) this.abortGeneration();
+    await this.interruptPromise;
+    this.interruptPromise = null;
+    if (this.webLLMEngine) {
+      try {
+        await this.webLLMEngine.resetChat();
+      } catch (err) {
+        const engine = this.webLLMEngine;
+        this.webLLMEngine = null;
+        await engine.unload();
+        throw err;
+      }
+    }
+  }
+
+  public async retryLocalModel(): Promise<void> {
+    if (this.webLLMEngine) {
+      try {
+        await this.webLLMEngine.resetChat();
+        modelManager.updateState({
+          stage: 'ready',
+          progress: 100,
+          statusText: 'On-device WebGPU model ready.',
+          activeEngine: 'webgpu',
+        });
+        return;
+      } catch (err) {
+        console.warn('[Samjho] Reset failed; reloading the local model:', err);
+        const engine = this.webLLMEngine;
+        this.webLLMEngine = null;
+        try {
+          await engine.unload();
+        } catch (unloadError) {
+          console.error('[Samjho] Could not unload the failed local model:', unloadError);
+          modelManager.updateState({
+            stage: 'error',
+            progress: 0,
+            statusText: 'The local model could not be reset or unloaded. Reload the page before trying again.',
+            activeEngine: 'webgpu',
+            error: unloadError instanceof Error ? unloadError.message : 'Unknown model unload error',
+          });
+          return;
+        }
+      }
+    }
+
+    await this.initWebLLM();
   }
 
   /**
@@ -835,7 +886,8 @@ export class InferenceEngine {
     attachments?: FileAttachment[],
     onStatus?: (status: string) => void
   ): Promise<{ text: string; mode: ConversationMode }> {
-    this.abortController = new AbortController();
+    const abortController = new AbortController();
+    this.abortController = abortController;
     const mode = detectConversationMode(userText);
     const history = sessionManager.getContext();
     const settings = aiSettingsManager.getSettings();
@@ -852,126 +904,82 @@ export class InferenceEngine {
       return { text: intervention, mode };
     }
 
-    // 2. Real-Time Multi-Source Web Knowledge & Website Extraction (RAG)
+    // External search is disabled by default and enabled only by an explicit user setting.
     let webResult: WebSearchResult | null = null;
-    let webContext: string | undefined = undefined;
+    if (settings.externalWebSearchEnabled) {
+      try {
+        webResult = await detectAndFetchWebContext(userText, abortController.signal, onStatus);
+      } catch (err) {
+        console.warn('[Samjho Web] External search failed:', err);
+      }
+    }
+
+    if (abortController.signal.aborted) return { text: '', mode };
+
+    if (!this.webLLMEngine) {
+      return {
+        text: 'The on-device AI model is not ready. Check WebGPU support or use Retry to load the model. Your message was not sent to a hosted AI service.',
+        mode,
+      };
+    }
+
+    onStatus?.('Generating locally with WebGPU...');
+    modelManager.updateState({
+      stage: 'generating',
+      statusText: 'Generating on this device.',
+      activeEngine: 'webgpu',
+    });
+
     try {
-      webResult = await detectAndFetchWebContext(userText, this.abortController.signal, onStatus);
+      const messages = contextManager.buildPrompt(userText, history, mode, attachments);
       if (webResult) {
-        webContext = formatWebContextForPrompt(webResult);
+        messages.push({ role: 'system', content: formatWebContextForPrompt(webResult) });
       }
-    } catch (e) {
-      console.warn('[Samjho Web] Extraction failed:', e);
-    }
+      const replyChunks = await this.webLLMEngine.chat.completions.create({
+        messages: messages as any,
+        stream: true,
+        temperature: 0.7,
+      });
 
-    onStatus?.('✨ Generating answer...');
-
-    // 3. User-Configured High-Power Cloud LLMs (Groq, Gemini, OpenAI)
-    if (settings.provider === 'groq' && settings.groqApiKey) {
-      try {
-        const messages = buildLLMMessages(userText, history, mode, attachments, webContext);
-        const fullText = await streamGroq(
-          settings,
-          messages,
-          (delta, full) => onChunk(delta, full),
-          this.abortController.signal
-        );
-        return { text: fullText, mode };
-      } catch (err: any) {
-        console.warn('[Groq stream failed, falling back]:', err.message);
+      let accumulated = '';
+      for await (const chunk of replyChunks) {
+        if (abortController.signal.aborted) break;
+        const delta = chunk.choices[0]?.delta?.content || '';
+        accumulated += delta;
+        onChunk(delta, accumulated);
       }
-    }
 
-    if (settings.provider === 'gemini' && settings.geminiApiKey) {
-      try {
-        const messages = buildLLMMessages(userText, history, mode, attachments, webContext);
-        const fullText = await streamGemini(
-          settings,
-          messages,
-          (delta, full) => onChunk(delta, full),
-          this.abortController.signal
-        );
-        return { text: fullText, mode };
-      } catch (err: any) {
-        console.warn('[Gemini stream failed, falling back]:', err.message);
+      return { text: accumulated, mode };
+    } catch (err) {
+      if (abortController.signal.aborted) {
+        return { text: '', mode };
       }
-    }
 
-    if (settings.provider === 'openai' && settings.openaiApiKey) {
-      try {
-        const messages = buildLLMMessages(userText, history, mode, attachments, webContext);
-        const fullText = await streamOpenAICompatible(
-          settings,
-          messages,
-          (delta, full) => onChunk(delta, full),
-          this.abortController.signal
-        );
-        return { text: fullText, mode };
-      } catch (err: any) {
-        console.warn('[OpenAI stream failed, falling back]:', err.message);
+      console.error('[Samjho] Local WebGPU generation failed:', err);
+      modelManager.updateState({
+        stage: 'error',
+        progress: 0,
+        statusText: 'On-device generation failed. Retry the local model; no hosted fallback was used.',
+        activeEngine: 'webgpu',
+        error: err instanceof Error ? err.message : 'Unknown generation error',
+      });
+      return {
+        text: 'The on-device model could not generate a response. Use Retry to try the local model again. Your message was not sent to a hosted AI service.',
+        mode,
+      };
+    } finally {
+      if (this.abortController === abortController) {
+        this.abortController = null;
       }
-    }
-
-    // 4. WebGPU Local Model
-    if (settings.provider === 'webgpu' && webLLMEngine) {
-      try {
-        const messages = contextManager.buildPrompt(userText, history, mode, attachments);
-        if (webContext) {
-          messages.push({ role: 'system', content: webContext });
-        }
-        const replyChunks = await webLLMEngine.chat.completions.create({
-          messages: messages as any,
-          stream: true,
-          temperature: 0.7,
+      if (modelManager.getState().stage === 'generating') {
+        modelManager.updateState({
+          stage: 'ready',
+          progress: 100,
+          statusText: 'On-device WebGPU model ready.',
+          activeEngine: 'webgpu',
         });
-
-        let accumulated = '';
-        for await (const chunk of replyChunks) {
-          if (this.abortController?.signal.aborted) break;
-          const delta = chunk.choices[0]?.delta?.content || '';
-          accumulated += delta;
-          onChunk(delta, accumulated);
-        }
-
-        return { text: accumulated, mode };
-      } catch (err: any) {
-        console.warn('[WebLLM stream failed, switching to universal AI]:', err);
       }
     }
-
-    // 5. Samjho Universal Intelligence Engine (Free, Out-Of-The-Box Streaming LLM)
-    // Seamlessly handles all general, coding, scientific, web-extracted, and conversational questions
-    try {
-      const messages = buildLLMMessages(userText, history, mode, attachments, webContext);
-      const fullText = await streamPollinationsAI(
-        messages,
-        (delta, full) => onChunk(delta, full),
-        this.abortController.signal
-      );
-      if (fullText && fullText.trim().length > 0) {
-        return { text: fullText, mode };
-      }
-    } catch (err: any) {
-      console.warn('[Universal AI stream failed, falling back to local engine]:', err.message);
-    }
-
-    // 6. Resilient Local Companion & Knowledge Engine (Offline fallback)
-    const fullResponse = generateLocalCompanionResponse(userText, mode, history, attachments, webResult);
-    let accumulated = '';
-    const words = fullResponse.split(/(\s+)/);
-
-    for (let i = 0; i < words.length; i++) {
-      if (this.abortController?.signal.aborted) {
-        break;
-      }
-      accumulated += words[i];
-      onChunk(words[i], accumulated);
-
-      const delay = 12 + Math.random() * 14;
-      await new Promise(r => setTimeout(r, delay));
-    }
-
-    return { text: accumulated, mode };
   }
 }
 

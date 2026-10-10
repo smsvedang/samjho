@@ -3,7 +3,7 @@ import { enforceStoragePolicy } from './storagePolicy';
 
 /**
  * DataClear
- * Handles instant, irreversible discarding of active conversation context from RAM.
+ * Clears app-held conversation context from memory and resets browser selections.
  */
 export function clearAllLocalConversationData(): void {
   sessionManager.clearSession();

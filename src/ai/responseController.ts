@@ -5,6 +5,7 @@ import { buildAttachmentPromptContext } from './fileProcessor';
 
 export class ResponseController {
   private isGenerating = false;
+  private generationId = 0;
 
   public getIsGenerating(): boolean {
     return this.isGenerating;
@@ -29,11 +30,10 @@ export class ResponseController {
       onProgress = arg3;
     }
 
-    if (this.isGenerating) {
-      inferenceEngine.abortGeneration();
-    }
+    if (this.isGenerating) this.stop();
 
     this.isGenerating = true;
+    const generationId = ++this.generationId;
 
     // Record user message with attachments in ephemeral session memory
     const contextContent = text + (attachments && attachments.length > 0 ? buildAttachmentPromptContext(attachments) : '');
@@ -61,16 +61,20 @@ export class ResponseController {
       const result = await inferenceEngine.generateResponse(
         text,
         (_chunk, fullText) => {
+          if (generationId !== this.generationId) return;
           assistantMessage.text = fullText;
           assistantMessage.statusText = undefined;
           onProgress?.({ ...assistantMessage });
         },
         attachments,
         (status) => {
+          if (generationId !== this.generationId) return;
           assistantMessage.statusText = status;
           onProgress?.({ ...assistantMessage });
         }
       );
+
+      if (generationId !== this.generationId) return assistantMessage;
 
       assistantMessage.text = result.text;
       assistantMessage.mode = result.mode;
@@ -86,15 +90,18 @@ export class ResponseController {
         timestamp: Date.now(),
       });
 
-      this.isGenerating = false;
       return assistantMessage;
     } catch (err: any) {
-      this.isGenerating = false;
+      if (generationId !== this.generationId) return assistantMessage;
       assistantMessage.text = 'Something went wrong. Please try again.';
       assistantMessage.isError = true;
       assistantMessage.isStreaming = false;
       onProgress?.({ ...assistantMessage });
       return assistantMessage;
+    } finally {
+      if (generationId === this.generationId) {
+        this.isGenerating = false;
+      }
     }
   }
 
@@ -102,6 +109,7 @@ export class ResponseController {
    * Stop generation immediately (PRD Section 31)
    */
   public stop(): void {
+    this.generationId += 1;
     inferenceEngine.abortGeneration();
     this.isGenerating = false;
   }

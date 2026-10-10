@@ -46,7 +46,7 @@ export const Privacy: React.FC<PrivacyProps> = ({ onBack, onStartTalking }) => {
             Samjho Privacy Center
           </h1>
           <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-            “Samjho is designed so your conversations can be processed locally on your device rather than sent to a cloud AI service.”
+            Chat generation uses a browser-based WebGPU model when available. This code does not establish what hosting, browser, model-download or optional search providers log or retain.
           </p>
         </div>
 
@@ -75,10 +75,10 @@ export const Privacy: React.FC<PrivacyProps> = ({ onBack, onStartTalking }) => {
               </h2>
             </div>
             <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed">
-              <strong>Samjho is designed not to maintain a cloud conversation history.</strong>
+              <strong>The app code does not write chat messages to a database or browser storage.</strong>
             </p>
             <div className="mt-4 pt-3 border-t border-neutral-100 dark:border-neutral-800 text-xs text-neutral-500 space-y-1">
-              <p>We do not store: User messages, AI responses, Conversation histories, Emotional profiles, or Behavioral telemetry.</p>
+              <p>Messages remain in page memory while chatting. External providers and hosting may have separate logging or retention policies that are not controlled by this app.</p>
             </div>
           </div>
 
@@ -90,10 +90,11 @@ export const Privacy: React.FC<PrivacyProps> = ({ onBack, onStartTalking }) => {
               </h2>
             </div>
             <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed">
-              <strong>On the user's device</strong> when local inference is available (using WebGPU and in-browser models).
+              <strong>In the browser</strong> when the WebGPU model is ready.
             </p>
             <div className="mt-4 pt-3 border-t border-neutral-100 dark:border-neutral-800 text-xs text-neutral-500">
-              <p>Your browser executes the AI model locally. Your thoughts do not pass through remote third-party AI APIs.</p>
+              <p>The chat inference path uses the loaded WebGPU model. External search is off by default; enabling it sends matching queries or URLs to third-party search/extraction services. Browser speech recognition may also use a browser-provided service.</p>
+              <p className="mt-2">PDF and image processing runs in the browser, but worker and language/runtime assets may be downloaded from public CDNs. This is separate from sending file contents to those CDNs.</p>
             </div>
           </div>
 
@@ -105,18 +106,18 @@ export const Privacy: React.FC<PrivacyProps> = ({ onBack, onStartTalking }) => {
               </h2>
             </div>
             <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed">
-              The active conversation is cleared according to the application's local-session behavior. When you close the tab, refresh, or hit <em>Clear Conversation</em>, active in-memory context is immediately discarded. There is no permanent memory or "Samjho remembers you" profile.
+              Clear Conversation aborts active generation and clears page messages, attachments, temporary context and the WebLLM chat state. Refreshing or leaving the page also discards application memory. It cannot remove model files/settings or recall data already sent to an external service.
             </p>
           </div>
         </div>
 
-        {/* PRD Section 19: No Tracking Policy */}
+        {/* Application telemetry disclosure */}
         <div className="p-6 rounded-2xl bg-neutral-100 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700/60 text-xs text-neutral-600 dark:text-neutral-400 space-y-2">
           <h3 className="font-bold text-neutral-900 dark:text-neutral-200">
-            Zero Tracking Guarantee
+            Application telemetry
           </h3>
           <p>
-            Samjho rejects invasive analytics, session recording (no Hotjar / LogRocket / Clarity), advertising trackers, third-party pixels, and behavioral profiling.
+            No analytics or session-recording integration was found in the checked-in application code. Hosting, browser, model and optional external-search service logging is outside the scope of this app code and must be checked separately.
           </p>
         </div>
 

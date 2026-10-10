@@ -10,24 +10,24 @@ export interface ModelProfile {
 }
 
 export const AVAILABLE_MODELS: Record<string, ModelProfile> = {
-  'SmolLM2-360M-Instruct-q4f16_1': {
-    id: 'SmolLM2-360M-Instruct-q4f16_1',
+  'SmolLM2-360M-Instruct-q4f16_1-MLC': {
+    id: 'SmolLM2-360M-Instruct-q4f16_1-MLC',
     name: 'SmolLM2 360M (Fast & Compact)',
     sizeMB: 380,
     tier: 'low',
     family: 'SmolLM',
     description: 'Instant loading, lightweight footprint, perfect for mobile and everyday chat.',
   },
-  'Qwen2.5-0.5B-Instruct-q4f16_1': {
-    id: 'Qwen2.5-0.5B-Instruct-q4f16_1',
+  'Qwen2.5-0.5B-Instruct-q4f16_1-MLC': {
+    id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
     name: 'Qwen 2.5 0.5B (Multilingual)',
     sizeMB: 512,
     tier: 'medium',
     family: 'Qwen',
     description: 'Strong Hindi, Hinglish, reasoning, and conceptual explanations.',
   },
-  'Qwen2.5-1.5B-Instruct-q4f16_1': {
-    id: 'Qwen2.5-1.5B-Instruct-q4f16_1',
+  'Qwen2.5-1.5B-Instruct-q4f16_1-MLC': {
+    id: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
     name: 'Qwen 2.5 1.5B (High Precision)',
     sizeMB: 1200,
     tier: 'high',
@@ -43,7 +43,7 @@ export class ModelManager {
     progress: 0,
     statusText: 'Initializing...',
     modelName: 'SmolLM2 360M (Local)',
-    activeEngine: 'local-companion',
+    activeEngine: 'webgpu',
   };
 
   private listeners: Array<(state: ModelLoadingState) => void> = [];
@@ -90,21 +90,19 @@ export class ModelManager {
     const userAgent = nav?.userAgent || '';
 
     let deviceTier: DeviceTier = 'medium';
-    let recommendedModelId = 'SmolLM2-360M-Instruct-q4f16_1';
+    let recommendedModelId = 'SmolLM2-360M-Instruct-q4f16_1-MLC';
 
     if (!hasWebGPU) {
-      // Browser does not support WebGPU - use our responsive client-side intelligent companion engine
-      deviceTier = 'low';
-      recommendedModelId = 'SmolLM2-360M-Instruct-q4f16_1';
+      deviceTier = 'unsupported';
     } else if (deviceMemory >= 8 && hardwareConcurrency >= 8) {
       deviceTier = 'high';
-      recommendedModelId = 'Qwen2.5-1.5B-Instruct-q4f16_1';
+      recommendedModelId = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
     } else if (deviceMemory >= 4) {
       deviceTier = 'medium';
-      recommendedModelId = 'Qwen2.5-0.5B-Instruct-q4f16_1';
+      recommendedModelId = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
     } else {
       deviceTier = 'low';
-      recommendedModelId = 'SmolLM2-360M-Instruct-q4f16_1';
+      recommendedModelId = 'SmolLM2-360M-Instruct-q4f16_1-MLC';
     }
 
     this.capabilities = {

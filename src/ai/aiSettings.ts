@@ -1,14 +1,10 @@
 import { AISettings, EngineProvider } from '../types';
 
-const SETTINGS_STORAGE_KEY = 'samjho_ai_settings_v1';
+const SETTINGS_STORAGE_KEY = 'samjho_ai_settings_v2';
 
 const DEFAULT_SETTINGS: AISettings = {
-  provider: 'local-companion',
-  groqApiKey: '',
-  geminiApiKey: '',
-  openaiApiKey: '',
-  openaiBaseUrl: 'https://api.openai.com/v1',
-  openaiModel: 'gpt-4o-mini',
+  provider: 'webgpu',
+  externalWebSearchEnabled: false,
 };
 
 class AISettingsManager {
@@ -23,10 +19,14 @@ class AISettingsManager {
     if (typeof window === 'undefined') return { ...DEFAULT_SETTINGS };
 
     try {
+      localStorage.removeItem('samjho_ai_settings_v1');
       const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        return { ...DEFAULT_SETTINGS, ...parsed };
+        return {
+          ...DEFAULT_SETTINGS,
+          externalWebSearchEnabled: parsed.externalWebSearchEnabled === true,
+        };
       }
     } catch (e) {
       console.warn('Failed to parse AI settings:', e);

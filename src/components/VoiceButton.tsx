@@ -9,6 +9,8 @@ interface VoiceButtonProps {
 export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscript, disabled = false }) => {
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(true);
+  const [showPrivacyNotice, setShowPrivacyNotice] = useState(false);
+  const [speechServiceConsent, setSpeechServiceConsent] = useState(false);
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
@@ -67,6 +69,10 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscript, disabled
       } catch {}
       setIsListening(false);
     } else {
+      if (!speechServiceConsent) {
+        setShowPrivacyNotice(true);
+        return;
+      }
       try {
         recognitionRef.current?.start();
         setIsListening(true);
@@ -88,7 +94,7 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscript, disabled
         onClick={toggleListening}
         disabled={disabled}
         aria-label={isListening ? "Listening... click to stop" : "Talk to Samjho (Voice input)"}
-        title={isListening ? "Listening... (Local Speech Recognition)" : "Talk to Samjho (Voice is processed on your device)"}
+        title={isListening ? 'Listening... click to stop' : 'Talk to Samjho using browser speech recognition'}
         className={`p-2.5 rounded-full transition-all duration-200 cursor-pointer ${
           isListening
             ? 'bg-red-500 text-white shadow-lg shadow-red-500/30 animate-pulse scale-105'
@@ -110,6 +116,43 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscript, disabled
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1 rounded-full bg-neutral-900 text-white text-[11px] font-medium whitespace-nowrap shadow-lg flex items-center gap-1.5 animate-bounce">
           <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-ping"></span>
           Listening... (Bolo, main sun raha hoon)
+        </div>
+      )}
+      {showPrivacyNotice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="max-w-sm rounded-2xl bg-white dark:bg-surface-darkCard p-5 shadow-2xl border border-neutral-200 dark:border-neutral-800">
+            <h3 className="font-semibold text-sm text-neutral-900 dark:text-neutral-100">
+              Use browser speech recognition?
+            </h3>
+            <p className="mt-2 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+              Speech recognition is provided by your browser. Samjho cannot verify whether audio is processed on-device or sent to the browser provider. Continue only if you are comfortable with that provider’s handling.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPrivacyNotice(false)}
+                className="px-3 py-2 rounded-xl text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSpeechServiceConsent(true);
+                  setShowPrivacyNotice(false);
+                  try {
+                    recognitionRef.current?.start();
+                    setIsListening(true);
+                  } catch (err) {
+                    console.warn('[Samjho Voice] Could not start speech recognition:', err);
+                  }
+                }}
+                className="px-3 py-2 rounded-xl text-xs font-semibold bg-samjho-600 text-white hover:bg-samjho-700"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

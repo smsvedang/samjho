@@ -120,6 +120,89 @@ async function extractTextFromPDF(
 }
 
 /**
+ * Preprocesses an image on HTML5 Canvas to dramatically improve OCR accuracy for handwriting & photos:
+ * 1. Rescales to optimal OCR DPI / resolution.
+ * 2. Converts to high-contrast grayscale.
+ * 3. Normalizes luminance & suppresses ruled notebook lines / background shadows.
+ */
+function preprocessImageForOCR(img: HTMLImageElement): string {
+  if (typeof document === 'undefined') return img.src;
+
+  try {
+    const canvas = document.createElement('canvas');
+    let width = img.naturalWidth || img.width;
+    let height = img.naturalHeight || img.height;
+
+    if (!width || !height) return img.src;
+
+    // Optimal scaling for OCR (aim for ~1800-2400px width/height for clear character strokes)
+    const maxDim = Math.max(width, height);
+    let scale = 1;
+    if (maxDim < 1400) {
+      scale = Math.min(2.5, 1800 / maxDim);
+    } else if (maxDim > 3200) {
+      scale = 2400 / maxDim;
+    }
+
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return img.src;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, width, height);
+
+    const imgData = ctx.getImageData(0, 0, width, height);
+    const data = imgData.data;
+
+    // Calculate min & max luminance for contrast stretching
+    let minLum = 255;
+    let maxLum = 0;
+    const grayBuffer = new Float32Array(data.length / 4);
+
+    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      grayBuffer[j] = gray;
+      if (gray < minLum) minLum = gray;
+      if (gray > maxLum) maxLum = gray;
+    }
+
+    const range = Math.max(1, maxLum - minLum);
+
+    // Apply adaptive contrast stretching & push light paper background to pure white
+    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+      let norm = ((grayBuffer[j] - minLum) / range) * 255;
+
+      // S-curve contrast boost:
+      if (norm > 155) {
+        // Boost light background/paper to pure white (#FFFFFF), eliminating ruled notebook lines & shadows
+        norm = Math.min(255, norm * 1.3);
+      } else if (norm < 115) {
+        // Deepen handwritten strokes
+        norm = norm * 0.7;
+      }
+
+      data[i] = norm;
+      data[i + 1] = norm;
+      data[i + 2] = norm;
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+    return canvas.toDataURL('image/png');
+  } catch (err) {
+    console.warn('[OCR Preprocess] Fallback to raw image:', err);
+    return img.src;
+  }
+}
+
+/**
  * Optical Character Recognition (OCR) & Visual metadata for uploaded images
  */
 async function processImage(
@@ -130,7 +213,7 @@ async function processImage(
   extractedText?: string;
   dimensions?: { width: number; height: number };
 }> {
-  onProgress?.('Processing...');
+  onProgress?.('Loading image...');
 
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -140,31 +223,57 @@ async function processImage(
   });
 
   // Get dimensions via an Image object
-  const dimensions = await new Promise<{ width: number; height: number }>((resolve) => {
-    const img = new Image();
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    img.onerror = () => resolve({ width: 0, height: 0 });
-    img.src = dataUrl;
+  const { dimensions, img } = await new Promise<{
+    dimensions: { width: number; height: number };
+    img: HTMLImageElement;
+  }>((resolve) => {
+    const image = new Image();
+    image.onload = () =>
+      resolve({
+        dimensions: { width: image.naturalWidth, height: image.naturalHeight },
+        img: image,
+      });
+    image.onerror = () =>
+      resolve({
+        dimensions: { width: 0, height: 0 },
+        img: image,
+      });
+    image.src = dataUrl;
   });
 
   let extractedText: string | undefined = undefined;
 
   try {
-    onProgress?.('Processing...');
+    onProgress?.('Enhancing image clarity...');
+    const preprocessedDataUrl = preprocessImageForOCR(img);
+
+    onProgress?.('Extracting text & handwriting...');
     const { recognize } = await import('tesseract.js');
-    
+
     // Set a timeout so processing never hangs indefinitely
-    const ocrPromise = recognize(dataUrl, 'eng', {
+    const ocrPromise = recognize(preprocessedDataUrl, 'eng', {
       logger: (_m) => {
-        onProgress?.('Processing...');
+        onProgress?.('Recognizing text...');
       },
     });
 
-    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000));
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 15000));
     const result = await Promise.race([ocrPromise, timeoutPromise]);
 
-    if (result && result.data && result.data.text && result.data.text.trim().length > 3) {
-      extractedText = result.data.text.trim();
+    if (result && result.data && result.data.text) {
+      // Clean up lines that are only random noise or punctuation
+      const rawLines = result.data.text.split('\n');
+      const cleanLines = rawLines
+        .map((l) => l.trim())
+        .filter((l) => {
+          // Keep line if it has at least some alphanumeric characters
+          const alnumCount = (l.match(/[a-zA-Z0-9]/g) || []).length;
+          return alnumCount >= 2;
+        });
+
+      if (cleanLines.length > 0) {
+        extractedText = cleanLines.join('\n');
+      }
     }
   } catch (err: any) {
     console.warn('[Samjho] Image text notice:', err?.message || err);

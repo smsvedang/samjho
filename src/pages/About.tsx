@@ -81,14 +81,14 @@ export const About: React.FC<AboutProps> = ({ onBack, onStartTalking }) => {
             <div className="p-4 rounded-2xl bg-white dark:bg-surface-darkCard border border-neutral-200/80 dark:border-neutral-800 shadow-card">
               <span className="text-xs font-bold text-samjho-600 dark:text-samjho-400">2. No Conversation Database</span>
               <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-                Samjho does not maintain a cloud conversation history. What you type stays on your machine.
+                Chat messages are held in page memory and are not written to a database or browser history storage by this app. External service retention is separate.
               </p>
             </div>
 
             <div className="p-4 rounded-2xl bg-white dark:bg-surface-darkCard border border-neutral-200/80 dark:border-neutral-800 shadow-card">
               <span className="text-xs font-bold text-samjho-600 dark:text-samjho-400">3. Local Intelligence</span>
               <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-                Conversation processing happens locally in your browser via WebGPU and local companion logic.
+                Chat inference uses the in-browser WebGPU model when available. If it cannot load, the app does not switch to a hosted AI.
               </p>
             </div>
 

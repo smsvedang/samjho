@@ -3,9 +3,9 @@
  * 
  * PRD Principles:
  * 1. No Identity (No name, email, phone, account, password, profile)
- * 2. No Conversation Database (Zero cloud logs or remote databases)
+ * 2. No app-managed conversation database or history
  * 3. Ephemeral Session Memory (In-memory state only during the active browser session)
- * 4. Zero Conversation Disk Leaks (localStorage / cookies must never hold messages)
+ * 4. No conversation messages in app-managed browser storage
  */
 
 export const STORAGE_POLICY = {
@@ -39,8 +39,8 @@ export function enforceStoragePolicy(): void {
  * Explicit Privacy Statement for PRD Section 51
  */
 export const PRIVACY_STATEMENT = {
-  short: "Samjho is designed so your conversations can be processed locally on your device rather than sent to a cloud AI service.",
+  short: "Samjho uses an in-browser model for chat. Model files may be downloaded and cached; optional web search sends your query or URL to external services.",
   zeroIdentity: "No account, no sign-in, no phone, no email required.",
-  zeroDatabase: "No conversation database. When you clear or close your tab, temporary context is discarded.",
-  deviceProcessing: "All thinking, reasoning, and listening happens directly in your browser.",
+  zeroDatabase: "The app has no conversation database. When you clear or close your tab, temporary context is discarded; this does not describe provider or hosting retention.",
+  deviceProcessing: "Chat inference runs in your browser when the WebGPU model is loaded. Browser speech recognition may use a browser-provided service.",
 };

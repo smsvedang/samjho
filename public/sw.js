@@ -1,4 +1,5 @@
-const CACHE_NAME = 'samjho-v1';
+const CACHE_PREFIX = 'samjho-static-';
+const CACHE_NAME = `${CACHE_PREFIX}v2`;
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -18,7 +19,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_NAME) {
+          if ((key.startsWith(CACHE_PREFIX) || key === 'samjho-v1') && key !== CACHE_NAME) {
             return caches.delete(key);
           }
         })

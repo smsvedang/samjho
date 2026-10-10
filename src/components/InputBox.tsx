@@ -21,6 +21,7 @@ interface InputBoxProps {
   onStop: () => void;
   isGenerating: boolean;
   disabled?: boolean;
+  clearVersion?: number;
 }
 
 export const InputBox: React.FC<InputBoxProps> = ({
@@ -28,12 +29,22 @@ export const InputBox: React.FC<InputBoxProps> = ({
   onStop,
   isGenerating,
   disabled = false,
+  clearVersion = 0,
 }) => {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const clearVersionRef = useRef(clearVersion);
+  clearVersionRef.current = clearVersion;
+
+  useEffect(() => {
+    setText('');
+    setAttachments([]);
+    setIsDragging(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [clearVersion]);
 
   // Auto-resize textarea up to 160px height
   useEffect(() => {
@@ -53,6 +64,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
   const handleFiles = async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
     if (fileArray.length === 0) return;
+    const requestClearVersion = clearVersionRef.current;
 
     for (const file of fileArray) {
       const tempId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
@@ -70,27 +82,32 @@ export const InputBox: React.FC<InputBoxProps> = ({
 
       try {
         const processed = await processUploadedFile(file, (statusText) => {
+          if (clearVersionRef.current !== requestClearVersion) return;
           setAttachments((prev) =>
             prev.map((a) => (a.id === tempId ? { ...a, statusText } : a))
           );
         });
 
-        setAttachments((prev) =>
-          prev.map((a) => (a.id === tempId ? processed : a))
-        );
+        if (clearVersionRef.current === requestClearVersion) {
+          setAttachments((prev) =>
+            prev.map((a) => (a.id === tempId ? processed : a))
+          );
+        }
       } catch (err: any) {
-        setAttachments((prev) =>
-          prev.map((a) =>
-            a.id === tempId
-              ? {
-                  ...a,
-                  status: 'error',
-                  error: err?.message || 'Error reading file',
-                  statusText: 'Error',
-                }
-              : a
-          )
-        );
+        if (clearVersionRef.current === requestClearVersion) {
+          setAttachments((prev) =>
+            prev.map((a) =>
+              a.id === tempId
+                ? {
+                    ...a,
+                    status: 'error',
+                    error: err?.message || 'Error reading file',
+                    statusText: 'Error',
+                  }
+                : a
+            )
+          );
+        }
       }
     }
   };
@@ -196,7 +213,7 @@ export const InputBox: React.FC<InputBoxProps> = ({
           <div className="absolute inset-0 z-30 rounded-3xl bg-samjho-600/10 dark:bg-samjho-900/40 backdrop-blur-xs flex items-center justify-center border-2 border-dashed border-samjho-500 pointer-events-none">
             <span className="text-sm font-semibold text-samjho-700 dark:text-samjho-300 flex items-center gap-2">
               <Paperclip className="w-4 h-4 animate-bounce" />
-              Drop files here to upload (100% on-device & private)
+              Drop files here to process in this browser. If external web search is enabled, extracted text is added to the local-model context.
             </span>
           </div>
         )}

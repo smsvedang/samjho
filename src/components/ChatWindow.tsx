@@ -12,7 +12,6 @@ import { AISettingsModal } from './AISettingsModal';
 import { aiSettingsManager } from '../ai/aiSettings';
 import { AISettings } from '../types';
 import {
-  RotateCcw,
   Trash2,
   Plus,
   Sun,
@@ -25,8 +24,7 @@ import {
   MessageCircle,
   Code,
   Zap,
-  Cpu,
-  Server
+  Cpu
 } from 'lucide-react';
 
 interface ChatWindowProps {
@@ -95,10 +93,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
   const [showAISettings, setShowAISettings] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [aiSettings, setAiSettings] = useState<AISettings>(aiSettingsManager.getSettings());
   const [modelState, setModelState] = useState<ModelLoadingState>(modelManager.getState());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const requestVersion = useRef(0);
+  const [clearVersion, setClearVersion] = useState(0);
 
   useEffect(() => {
     const unsubModel = modelManager.subscribe(setModelState);
@@ -120,6 +121,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [messages]);
 
   const handleSendMessage = async (text: string, attachments?: FileAttachment[]) => {
+    const requestId = ++requestVersion.current;
     const userMsg: ChatMessage = {
       id: 'user-' + Date.now(),
       sender: 'user',
@@ -133,6 +135,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
     try {
       await responseController.handleUserMessage(text, attachments, (partialMsg) => {
+        if (requestId !== requestVersion.current) return;
         setMessages((prev) => {
           const index = prev.findIndex((m) => m.id === partialMsg.id);
           if (index >= 0) {
@@ -145,11 +148,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         });
       });
     } finally {
-      setIsGenerating(false);
+      if (requestId === requestVersion.current) setIsGenerating(false);
     }
   };
 
   const handleStop = () => {
+    requestVersion.current += 1;
     responseController.stop();
     setIsGenerating(false);
   };
@@ -167,12 +171,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       return prev;
     });
 
+    const requestId = ++requestVersion.current;
     setIsGenerating(true);
     try {
       await responseController.handleUserMessage(
         lastUserMessage.text,
         lastUserMessage.attachments,
         (partialMsg) => {
+          if (requestId !== requestVersion.current) return;
           setMessages((prev) => {
             const index = prev.findIndex((m) => m.id === partialMsg.id);
             if (index >= 0) {
@@ -186,15 +192,33 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         }
       );
     } finally {
-      setIsGenerating(false);
+      if (requestId === requestVersion.current) setIsGenerating(false);
     }
   };
 
-  // PRD Section 21: Clear Conversation
-  const confirmClearConversation = () => {
+  const confirmClearConversation = async () => {
+    requestVersion.current += 1;
+    responseController.stop();
     clearAllLocalConversationData();
     setMessages([]);
+    setIsGenerating(false);
+    setIsClearing(true);
+    setClearVersion((version) => version + 1);
     setShowClearModal(false);
+    try {
+      await inferenceEngine.resetConversation();
+    } catch (err) {
+      console.error('[Samjho] Conversation was cleared, but local model context reset failed:', err);
+      modelManager.updateState({
+        stage: 'error',
+        progress: 0,
+        statusText: 'Conversation cleared, but the local model context could not be reset. Retry the model before chatting.',
+        activeEngine: 'webgpu',
+        error: err instanceof Error ? err.message : 'Unknown model reset error',
+      });
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   const handleNewConversation = () => {
@@ -224,36 +248,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
           {/* Privacy Indicator Badge */}
           <div className="ml-1 hidden sm:block">
-            <PrivacyBadge engineType={modelState.activeEngine} />
+            <PrivacyBadge
+              engineType={modelState.activeEngine}
+              stage={modelState.stage}
+              externalSearchEnabled={aiSettings.externalWebSearchEnabled}
+            />
           </div>
 
           {/* AI Engine & Intelligence Selector */}
           <button
             onClick={() => setShowAISettings(true)}
             className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800/80 text-neutral-800 dark:text-neutral-200 border border-neutral-200/80 dark:border-neutral-700/80 hover:bg-samjho-50 dark:hover:bg-samjho-950/40 hover:border-samjho-300 dark:hover:border-samjho-700 transition cursor-pointer shadow-2xs group"
-            title="Configure AI Engine & API Keys"
+            title="Configure local model and optional external search"
           >
-            {aiSettings.provider === 'groq' ? (
-              <>
-                <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                <span className="font-semibold text-amber-700 dark:text-amber-400">Groq (70B)</span>
-              </>
-            ) : aiSettings.provider === 'gemini' ? (
-              <>
-                <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                <span className="font-semibold text-blue-700 dark:text-blue-400">Gemini 2.0</span>
-              </>
-            ) : aiSettings.provider === 'openai' ? (
-              <>
-                <Server className="w-3.5 h-3.5 text-purple-500" />
-                <span className="font-semibold text-purple-700 dark:text-purple-400">OpenAI</span>
-              </>
-            ) : (
-              <>
-                <Cpu className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="font-semibold text-emerald-700 dark:text-emerald-400">Smart Local</span>
-              </>
-            )}
+            <Cpu className="w-3.5 h-3.5 text-emerald-500" />
+            <span className="font-semibold text-emerald-700 dark:text-emerald-400">WebGPU model</span>
             <span className="text-[10px] text-neutral-400 group-hover:text-neutral-600 dark:group-hover:text-neutral-300">⚙</span>
           </button>
         </div>
@@ -312,28 +321,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       {/* Mobile Privacy & Engine indicator strip */}
       <div className="sm:hidden px-4 py-1.5 bg-neutral-50/80 dark:bg-neutral-900/80 border-b border-neutral-200/40 dark:border-neutral-800/40 flex items-center justify-center gap-2">
-        <PrivacyBadge engineType={modelState.activeEngine} />
+        <PrivacyBadge
+          engineType={modelState.activeEngine}
+          stage={modelState.stage}
+          externalSearchEnabled={aiSettings.externalWebSearchEnabled}
+        />
         <button
           onClick={() => setShowAISettings(true)}
           className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 cursor-pointer"
         >
           <Sparkles className="w-3 h-3 text-samjho-500" />
-          <span>{aiSettings.provider === 'groq' ? 'Groq' : aiSettings.provider === 'gemini' ? 'Gemini' : 'AI Engine'}</span>
+          <span>Settings</span>
         </button>
       </div>
 
       {/* Model Loader Banner (now invisible during normal operation) */}
       <ModelLoader
         state={modelState}
-        onRetry={() => inferenceEngine.initWebLLM()}
-        onDismiss={() => {
-          modelManager.updateState({
-            stage: 'ready',
-            progress: 100,
-            statusText: 'Samjho is ready',
-            activeEngine: 'local-companion',
-          });
-        }}
+        onRetry={() => void inferenceEngine.retryLocalModel()}
       />
 
       {/* Main Chat Scroll Area */}
@@ -359,7 +364,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 Ask anything. Say anything.
               </p>
               <p className="text-xs text-neutral-400 dark:text-neutral-500 max-w-sm mb-8">
-                Everything runs on your device. No account, no cloud, no data collection.
+                Chat uses an in-browser WebGPU model when available. Its model files may need to download; external web search is off unless enabled in settings.
               </p>
 
               {/* Starter Suggestions */}
@@ -418,6 +423,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           onSend={handleSendMessage}
           onStop={handleStop}
           isGenerating={isGenerating}
+          clearVersion={clearVersion}
+          disabled={isClearing}
         />
       </footer>
 
@@ -433,7 +440,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               Clear this conversation?
             </h3>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-6 leading-relaxed">
-              All messages will disappear. Samjho doesn't store any data — this conversation only exists in your current session.
+              Messages and temporary context in this page will be cleared. Model files, browser settings, and any data already sent to an external service are not removed.
             </p>
 
             <div className="flex items-center justify-center gap-3">
@@ -458,6 +465,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       <AISettingsModal
         isOpen={showAISettings}
         onClose={() => setShowAISettings(false)}
+        onSaved={() => void inferenceEngine.initWebLLM()}
       />
     </div>
   );

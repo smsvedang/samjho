@@ -8,10 +8,11 @@
 ## ☼ Core Product Philosophy
 
 1. **No Identity:** No Name, Email, Phone number, Account, Password, or Profile.
-2. **No Conversation Database:** Samjho does not maintain a cloud conversation history. What you type stays on your device.
-3. **Local Intelligence:** Conversation processing runs locally on the user's device via WebGPU and in-browser local companion models.
-4. **Human Conversation:** Understands context and nuance instead of mechanically matching keywords.
-5. **Explain, Don't Lecture:** Adapts explanations to your level and language (English, Hindi, Hinglish).
+2. **No App-Managed Conversation History:** Chat messages are held in page memory and are not written to a database or browser history storage by this application. This does not establish third-party or hosting retention.
+3. **Local Intelligence:** Chat inference uses WebLLM/WebGPU in the browser when supported. Model artifacts are downloaded and may be cached separately. There is no hosted AI fallback.
+4. **Optional Web Search:** Disabled by default. Enabling it sends matching queries or URLs to external search/extraction services.
+5. **Human Conversation:** Understands context and nuance instead of mechanically matching keywords.
+6. **Explain, Don't Lecture:** Adapts explanations to your level and language (English, Hindi, Hinglish).
 
 ---
 
@@ -43,12 +44,12 @@ samjho/
 │   │   ├── ChatWindow.tsx      # Main conversational screen
 │   │   ├── MessageBubble.tsx   # Markdown, TTS, copy, mode badges, helpline cards
 │   │   ├── InputBox.tsx        # Auto-resizing input, stop generation, speech-to-text
-│   │   ├── VoiceButton.tsx     # Local speech recognition (Web Speech API)
-│   │   ├── PrivacyBadge.tsx    # Live device inference verification badge
+│   │   ├── VoiceButton.tsx     # Browser speech recognition with provider disclosure
+│   │   ├── PrivacyBadge.tsx    # Local model status and data-handling details
 │   │   └── ModelLoader.tsx     # Download progress & compatibility states
 │   ├── ai/
 │   │   ├── modelManager.ts     # Device tier detection (WebGPU/RAM)
-│   │   ├── inferenceEngine.ts  # WebLLM streaming & client companion engine
+│   │   ├── inferenceEngine.ts  # Local WebLLM/WebGPU streaming inference
 │   │   ├── contextManager.ts   # System prompt & compact ephemeral context
 │   │   ├── safetyEngine.ts     # Crisis evaluation & helpline directory
 │   │   └── responseController.ts # Conversation pipeline coordinator

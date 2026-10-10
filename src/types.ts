@@ -59,15 +59,11 @@ export type ModelStage =
   | 'error'
   | 'unsupported';
 
-export type EngineProvider = 'local-companion' | 'groq' | 'gemini' | 'openai' | 'webgpu';
+export type EngineProvider = 'webgpu';
 
 export interface AISettings {
   provider: EngineProvider;
-  groqApiKey?: string;
-  geminiApiKey?: string;
-  openaiApiKey?: string;
-  openaiBaseUrl?: string;
-  openaiModel?: string;
+  externalWebSearchEnabled: boolean;
 }
 
 export interface ModelLoadingState {

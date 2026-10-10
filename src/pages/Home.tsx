@@ -121,7 +121,7 @@ export const Home: React.FC<HomeProps> = ({
       <section className="relative px-6 pt-16 pb-20 max-w-4xl mx-auto text-center flex flex-col items-center">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-samjho-50 dark:bg-samjho-950/60 text-samjho-700 dark:text-samjho-300 border border-samjho-200/60 dark:border-samjho-800/40 text-xs font-semibold mb-6 animate-fade-in">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-          <span>No Account Required • Zero Cloud Conversation Database</span>
+          <span>No Account Required • No App-Managed Chat History</span>
         </div>
 
         <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-neutral-900 dark:text-neutral-50 mb-4 leading-tight">
@@ -132,7 +132,7 @@ export const Home: React.FC<HomeProps> = ({
         </p>
         <p className="text-sm sm:text-base text-neutral-500 dark:text-neutral-400 max-w-xl mb-10 leading-relaxed">
           “A place where I can say anything without having to introduce myself.”
-          Your conversations are designed to stay directly on your device.
+          Chat uses an in-browser model when WebGPU is available. Model files may be downloaded; external search is optional.
         </p>
 
         {/* Primary CTA and Secondary */}
@@ -299,15 +299,15 @@ export const Home: React.FC<HomeProps> = ({
             </div>
             <div className="p-4 rounded-xl bg-neutral-800/60 border border-neutral-700/60">
               <div className="text-emerald-400 font-bold text-lg mb-1">0</div>
-              <div className="text-xs text-neutral-300 font-medium">No Chat History</div>
+              <div className="text-xs text-neutral-300 font-medium">No App-Saved History</div>
             </div>
             <div className="p-4 rounded-xl bg-neutral-800/60 border border-neutral-700/60">
               <div className="text-emerald-400 font-bold text-lg mb-1">0</div>
-              <div className="text-xs text-neutral-300 font-medium">No Tracking</div>
+              <div className="text-xs text-neutral-300 font-medium">No App Analytics</div>
             </div>
             <div className="p-4 rounded-xl bg-neutral-800/60 border border-neutral-700/60 col-span-2 sm:col-span-1">
-              <div className="text-emerald-400 font-bold text-lg mb-1">100%</div>
-              <div className="text-xs text-neutral-300 font-medium">Local AI</div>
+              <div className="text-emerald-400 font-bold text-lg mb-1">WebGPU</div>
+              <div className="text-xs text-neutral-300 font-medium">Browser model when available</div>
             </div>
           </div>
         </div>
