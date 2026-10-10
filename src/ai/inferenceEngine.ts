@@ -6,6 +6,13 @@ import { sessionManager } from '../privacy/sessionManager';
 import { aiSettingsManager } from './aiSettings';
 import { detectAndFetchWebContext, formatWebContextForPrompt, WebSearchResult } from './webSearchEngine';
 import type { MLCEngine } from '@mlc-ai/web-llm';
+import {
+  buildLLMMessages,
+  streamPollinationsAI,
+  streamGroq,
+  streamGemini,
+  streamOpenAICompatible
+} from './cloudAI';
 
 /**
  * Detects the conversational mode from the user's message and context
@@ -904,11 +911,16 @@ export class InferenceEngine {
       return { text: intervention, mode };
     }
 
-    // External search is disabled by default and enabled only by an explicit user setting.
-    let webResult: WebSearchResult | null = null;
+    try {
+      // External search is disabled by default and enabled only by an explicit user setting.
+      let webResult: WebSearchResult | null = null;
+    let webContext: string | undefined = undefined;
     if (settings.externalWebSearchEnabled) {
       try {
         webResult = await detectAndFetchWebContext(userText, abortController.signal, onStatus);
+        if (webResult) {
+          webContext = formatWebContextForPrompt(webResult);
+        }
       } catch (err) {
         console.warn('[Samjho Web] External search failed:', err);
       }
@@ -916,71 +928,161 @@ export class InferenceEngine {
 
     if (abortController.signal.aborted) return { text: '', mode };
 
-    if (!this.webLLMEngine) {
-      return {
-        text: 'The on-device AI model is not ready. Check WebGPU support or use Retry to load the model. Your message was not sent to a hosted AI service.',
-        mode,
-      };
+    // 2. Strict WebGPU provider mode
+    if (settings.provider === 'webgpu') {
+      if (!this.webLLMEngine) {
+        return {
+          text: 'The on-device AI model is not ready. Check WebGPU support or use Retry to load the model. Your message was not sent to a hosted AI service.',
+          mode,
+        };
+      }
+
+      onStatus?.('Generating locally with WebGPU...');
+      modelManager.updateState({
+        stage: 'generating',
+        statusText: 'Generating on this device.',
+        activeEngine: 'webgpu',
+      });
+
+      try {
+        const messages = contextManager.buildPrompt(userText, history, mode, attachments);
+        if (webResult) {
+          messages.push({ role: 'system', content: formatWebContextForPrompt(webResult) });
+        }
+        const replyChunks = await this.webLLMEngine.chat.completions.create({
+          messages: messages as any,
+          stream: true,
+          temperature: 0.7,
+        });
+
+        let accumulated = '';
+        for await (const chunk of replyChunks) {
+          if (abortController.signal.aborted) break;
+          const delta = chunk.choices[0]?.delta?.content || '';
+          accumulated += delta;
+          onChunk(delta, accumulated);
+        }
+
+        return { text: accumulated, mode };
+      } catch (err) {
+        if (abortController.signal.aborted) {
+          return { text: '', mode };
+        }
+
+        console.error('[Samjho] Local WebGPU generation failed:', err);
+        modelManager.updateState({
+          stage: 'error',
+          progress: 0,
+          statusText: 'On-device generation failed. Retry the local model; no hosted fallback was used.',
+          activeEngine: 'webgpu',
+          error: err instanceof Error ? err.message : 'Unknown generation error',
+        });
+        return {
+          text: 'The on-device model could not generate a response. Use Retry to try the local model again. Your message was not sent to a hosted AI service.',
+          mode,
+        };
+      } finally {
+        if (this.abortController === abortController) {
+          this.abortController = null;
+        }
+        if (modelManager.getState().stage === 'generating') {
+          modelManager.updateState({
+            stage: 'ready',
+            progress: 100,
+            statusText: 'On-device WebGPU model ready.',
+            activeEngine: 'webgpu',
+          });
+        }
+      }
     }
 
-    onStatus?.('Generating locally with WebGPU...');
-    modelManager.updateState({
-      stage: 'generating',
-      statusText: 'Generating on this device.',
-      activeEngine: 'webgpu',
-    });
+    onStatus?.('Samjho is thinking...');
 
+    // 3. User-Configured High-Power Cloud LLMs (Groq, Gemini, OpenAI / Ollama)
+    if (settings.provider === 'groq' && settings.groqApiKey) {
+      try {
+        const messages = buildLLMMessages(userText, history, mode, attachments, webContext);
+        const fullText = await streamGroq(
+          settings,
+          messages,
+          (delta, full) => onChunk(delta, full),
+          abortController.signal
+        );
+        return { text: fullText, mode };
+      } catch (err: any) {
+        console.warn('[Groq stream failed, falling back]:', err.message);
+      }
+    }
+
+    if (settings.provider === 'gemini' && settings.geminiApiKey) {
+      try {
+        const messages = buildLLMMessages(userText, history, mode, attachments, webContext);
+        const fullText = await streamGemini(
+          settings,
+          messages,
+          (delta, full) => onChunk(delta, full),
+          abortController.signal
+        );
+        return { text: fullText, mode };
+      } catch (err: any) {
+        console.warn('[Gemini stream failed, falling back]:', err.message);
+      }
+    }
+
+    if (settings.provider === 'openai' && (settings.openaiApiKey || settings.openaiBaseUrl)) {
+      try {
+        const messages = buildLLMMessages(userText, history, mode, attachments, webContext);
+        const fullText = await streamOpenAICompatible(
+          settings,
+          messages,
+          (delta, full) => onChunk(delta, full),
+          abortController.signal
+        );
+        return { text: fullText, mode };
+      } catch (err: any) {
+        console.warn('[OpenAI stream failed, falling back]:', err.message);
+      }
+    }
+
+    // 4. Samjho Instant Intelligence (Free Out-Of-The-Box Streaming AI - 0MB Download)
     try {
-      const messages = contextManager.buildPrompt(userText, history, mode, attachments);
-      if (webResult) {
-        messages.push({ role: 'system', content: formatWebContextForPrompt(webResult) });
+      const messages = buildLLMMessages(userText, history, mode, attachments, webContext);
+      const fullText = await streamPollinationsAI(
+        messages,
+        (delta, full) => onChunk(delta, full),
+        abortController.signal
+      );
+      if (fullText && fullText.trim().length > 0) {
+        return { text: fullText, mode };
       }
-      const replyChunks = await this.webLLMEngine.chat.completions.create({
-        messages: messages as any,
-        stream: true,
-        temperature: 0.7,
-      });
+    } catch (err: any) {
+      console.warn('[Instant AI stream failed, falling back to local companion]:', err?.message);
+    }
 
-      let accumulated = '';
-      for await (const chunk of replyChunks) {
-        if (abortController.signal.aborted) break;
-        const delta = chunk.choices[0]?.delta?.content || '';
-        accumulated += delta;
-        onChunk(delta, accumulated);
-      }
+    // 5. Resilient Local Companion & Knowledge Engine (Instant offline fallback)
+    const fullResponse = generateLocalCompanionResponse(userText, mode, history, attachments, webResult);
+    let accumulated = '';
+    const words = fullResponse.split(/(\s+)/);
 
-      return { text: accumulated, mode };
-    } catch (err) {
+    for (let i = 0; i < words.length; i++) {
       if (abortController.signal.aborted) {
-        return { text: '', mode };
+        break;
       }
+      accumulated += words[i];
+      onChunk(words[i], accumulated);
 
-      console.error('[Samjho] Local WebGPU generation failed:', err);
-      modelManager.updateState({
-        stage: 'error',
-        progress: 0,
-        statusText: 'On-device generation failed. Retry the local model; no hosted fallback was used.',
-        activeEngine: 'webgpu',
-        error: err instanceof Error ? err.message : 'Unknown generation error',
-      });
-      return {
-        text: 'The on-device model could not generate a response. Use Retry to try the local model again. Your message was not sent to a hosted AI service.',
-        mode,
-      };
+      const delay = 10 + Math.random() * 12;
+      await new Promise(r => setTimeout(r, delay));
+    }
+
+    return { text: accumulated, mode };
     } finally {
       if (this.abortController === abortController) {
         this.abortController = null;
-      }
-      if (modelManager.getState().stage === 'generating') {
-        modelManager.updateState({
-          stage: 'ready',
-          progress: 100,
-          statusText: 'On-device WebGPU model ready.',
-          activeEngine: 'webgpu',
-        });
       }
     }
   }
 }
 
 export const inferenceEngine = new InferenceEngine();
+

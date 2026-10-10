@@ -7,7 +7,7 @@ interface ModelLoaderProps {
 }
 
 export const ModelLoader: React.FC<ModelLoaderProps> = ({ state, onRetry }) => {
-  if (state.stage === 'idle' || state.stage === 'ready' || state.stage === 'generating') {
+  if (state.activeEngine !== 'webgpu' || state.stage === 'idle' || state.stage === 'ready' || state.stage === 'generating') {
     return null;
   }
 

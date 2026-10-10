@@ -39,11 +39,11 @@ export const AVAILABLE_MODELS: Record<string, ModelProfile> = {
 export class ModelManager {
   private capabilities: DeviceCapabilities | null = null;
   private state: ModelLoadingState = {
-    stage: 'idle',
-    progress: 0,
-    statusText: 'Initializing...',
-    modelName: 'SmolLM2 360M (Local)',
-    activeEngine: 'webgpu',
+    stage: 'ready',
+    progress: 100,
+    statusText: 'Samjho AI Ready',
+    modelName: 'Samjho Instant Intelligence',
+    activeEngine: 'instant',
   };
 
   private listeners: Array<(state: ModelLoadingState) => void> = [];

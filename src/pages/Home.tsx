@@ -36,27 +36,21 @@ export const Home: React.FC<HomeProps> = ({
 
   const interactiveExamples = [
     {
-      label: 'Personal & Venting',
-      user: "Aaj bahut ajeeb din tha.",
-      samjho: "Hmm… lagta hai aaj ka din thoda zyada bhari raha. Koi specific baat hui ya bas andar se ajeeb lag raha hai? Main sun raha hoon, jo mann mein aaye bol sakte ho.",
+      label: 'Feeling Lonely & Empty',
+      user: "Doston ke saath reh kar bhi aakhri mein room aane par lagta hai ki bilkul akele hain.",
+      samjho: "Yeh feeling bohot real aur heavy hoti hai yaar. Aksar hum bheed mein muskura lete hain par jab shanti hoti hai toh andar ka khali-pan achanak hit karta hai. Main yahan hoon, bolo mann mein kya chal raha hai?",
       mode: 'Listen Mode'
     },
     {
-      label: 'Exam Stress + Personal',
-      user: "Kal exam hai aur kuch yaad nahi ho raha. Upar se anxiety ho rahi hai.",
-      samjho: "Dono cheezein ek saath chal rahi hain, isliye focus karna aur difficult lag raha hoga. Pehle panic ko thoda side mein rakhte hain. Tum chaho toh pehle thoda mann halka kar sakte ho, ya fir physics ko ek simple 10-minute ke plan se break down karein?",
-      mode: 'Mixed Mode'
+      label: 'Exhausted & Overwhelmed',
+      user: "Aaj bahut ajeeb aur thaka dene wala din tha, kuch samajh nahi aa raha.",
+      samjho: "Pehle bas ek gehri saans lo. Aaj tumhe sab kuch solve karne ki koi jaldi nahi hai. Agar bas mann halka karna hai toh bindaas bolte jao, main bina kisi judgment ke sun raha hoon.",
+      mode: 'Listen Mode'
     },
     {
-      label: 'Factual & Learning',
-      user: "Explain Faraday's law in simple language.",
-      samjho: "Think of Faraday's law as nature's reaction to moving magnets: Jab bhi kisi wire ke coil ke paas magnetic field change hota hai, woh electrons ko dhakka deta hai, creating electric current! Generators aur induction stoves isi par chalte hain.",
-      mode: 'Ask Mode'
-    },
-    {
-      label: 'Decision Making',
-      user: "Should I change my course?",
-      samjho: "Ye bada decision hai aur blindly haan ya naa kehna galat hoga. Aao pehle samjhte hain: Abhi kis cheez se sabse zyada frustration ho rahi hai—course ka syllabus, career options, ya peer pressure?",
+      label: 'Life Dilemma',
+      user: "Ek bada decision lena hai par dimaag bilkul freeze ho gaya hai.",
+      samjho: "Jab options bohot zyada hon aur darr laga ho toh freeze hona natural hai. Aao milke isko unpack karte hain — sabse pehle ye batao ki sabse bada darr kis baat ka hai?",
       mode: 'Think Mode'
     },
   ];
@@ -131,8 +125,7 @@ export const Home: React.FC<HomeProps> = ({
           An AI that listens, understands and explains.
         </p>
         <p className="text-sm sm:text-base text-neutral-500 dark:text-neutral-400 max-w-xl mb-10 leading-relaxed">
-          “A place where I can say anything without having to introduce myself.”
-          Chat uses an in-browser model when WebGPU is available. Model files may be downloaded; external search is optional.
+          “A safe space where you can say anything without having to introduce yourself. 100% private, anonymous, and judgment-free.”
         </p>
 
         {/* Primary CTA and Secondary */}
@@ -306,8 +299,8 @@ export const Home: React.FC<HomeProps> = ({
               <div className="text-xs text-neutral-300 font-medium">No App Analytics</div>
             </div>
             <div className="p-4 rounded-xl bg-neutral-800/60 border border-neutral-700/60 col-span-2 sm:col-span-1">
-              <div className="text-emerald-400 font-bold text-lg mb-1">WebGPU</div>
-              <div className="text-xs text-neutral-300 font-medium">Browser model when available</div>
+              <div className="text-emerald-400 font-bold text-lg mb-1">100%</div>
+              <div className="text-xs text-neutral-300 font-medium">Private & Ephemeral</div>
             </div>
           </div>
         </div>

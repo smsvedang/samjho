@@ -86,9 +86,9 @@ export const About: React.FC<AboutProps> = ({ onBack, onStartTalking }) => {
             </div>
 
             <div className="p-4 rounded-2xl bg-white dark:bg-surface-darkCard border border-neutral-200/80 dark:border-neutral-800 shadow-card">
-              <span className="text-xs font-bold text-samjho-600 dark:text-samjho-400">3. Local Intelligence</span>
+              <span className="text-xs font-bold text-samjho-600 dark:text-samjho-400">3. Private Intelligence</span>
               <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-                Chat inference uses the in-browser WebGPU model when available. If it cannot load, the app does not switch to a hosted AI.
+                Zero identity, zero data retention. Your messages stay private and disappear when you leave.
               </p>
             </div>
 

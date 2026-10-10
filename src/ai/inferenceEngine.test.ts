@@ -141,3 +141,43 @@ describe('local inference privacy path', () => {
     expect(localEngine.engine.resetChat).toHaveBeenCalledOnce();
   });
 });
+
+describe('instant zero-download AI path', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    aiSettingsManager.saveSettings({ provider: 'instant', externalWebSearchEnabled: false });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('generates response instantly using instant streaming AI without downloading WebGPU models', async () => {
+    const mockRes = new Response(
+      `data: {"choices":[{"delta":{"content":"Instant AI response"}}]}\n\ndata: [DONE]\n\n`,
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(mockRes));
+
+    const inference = new InferenceEngine();
+    const chunks: string[] = [];
+    const result = await inference.generateResponse('Hello Samjho', (_chunk, full) => {
+      chunks.push(full);
+    });
+
+    expect(result.text).toBe('Instant AI response');
+    expect(mocks.createEngine).not.toHaveBeenCalled();
+  });
+
+  it('falls back to local companion engine when network is offline without blocking user', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
+
+    const inference = new InferenceEngine();
+    const result = await inference.generateResponse('bohot akela feel ho raha hai', vi.fn());
+
+    expect(result.text).toContain('Akelepan');
+    expect(mocks.createEngine).not.toHaveBeenCalled();
+  });
+});
+

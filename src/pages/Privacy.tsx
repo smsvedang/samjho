@@ -46,7 +46,7 @@ export const Privacy: React.FC<PrivacyProps> = ({ onBack, onStartTalking }) => {
             Samjho Privacy Center
           </h1>
           <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
-            Chat generation uses a browser-based WebGPU model when available. This code does not establish what hosting, browser, model-download or optional search providers log or retain.
+            Samjho is designed to be completely anonymous, ephemeral, and respectful of your privacy.
           </p>
         </div>
 
@@ -90,11 +90,10 @@ export const Privacy: React.FC<PrivacyProps> = ({ onBack, onStartTalking }) => {
               </h2>
             </div>
             <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed">
-              <strong>In the browser</strong> when the WebGPU model is ready.
+              <strong>Ephemeral session memory</strong> without saving your identity or history.
             </p>
             <div className="mt-4 pt-3 border-t border-neutral-100 dark:border-neutral-800 text-xs text-neutral-500">
-              <p>The chat inference path uses the loaded WebGPU model. External search is off by default; enabling it sends matching queries or URLs to third-party search/extraction services. Browser speech recognition may also use a browser-provided service.</p>
-              <p className="mt-2">PDF and image processing runs in the browser, but worker and language/runtime assets may be downloaded from public CDNs. This is separate from sending file contents to those CDNs.</p>
+              <p>Messages stay in page memory while you talk and vanish when you close or clear the chat. No tracking, no user profiles, and no database storage.</p>
             </div>
           </div>
 

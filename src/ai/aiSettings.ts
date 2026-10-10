@@ -3,7 +3,7 @@ import { AISettings, EngineProvider } from '../types';
 const SETTINGS_STORAGE_KEY = 'samjho_ai_settings_v2';
 
 const DEFAULT_SETTINGS: AISettings = {
-  provider: 'webgpu',
+  provider: 'instant',
   externalWebSearchEnabled: false,
 };
 
@@ -19,13 +19,18 @@ class AISettingsManager {
     if (typeof window === 'undefined') return { ...DEFAULT_SETTINGS };
 
     try {
-      localStorage.removeItem('samjho_ai_settings_v1');
       const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
         return {
           ...DEFAULT_SETTINGS,
+          provider: parsed.provider || 'instant',
           externalWebSearchEnabled: parsed.externalWebSearchEnabled === true,
+          groqApiKey: parsed.groqApiKey,
+          geminiApiKey: parsed.geminiApiKey,
+          openaiApiKey: parsed.openaiApiKey,
+          openaiBaseUrl: parsed.openaiBaseUrl,
+          openaiModel: parsed.openaiModel,
         };
       }
     } catch (e) {
