@@ -14,7 +14,9 @@ import {
   Moon,
   Shield,
   HelpCircle,
+  Settings,
 } from 'lucide-react';
+import { AISettingsModal } from './AISettingsModal';
 
 interface ChatWindowProps {
   onNavigate?: (route: '/' | '/chat' | '/privacy' | '/safety' | '/about') => void;
@@ -30,6 +32,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -225,6 +228,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           >
             {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
           </button>
+
+          {/* AI Settings Button */}
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="p-2 rounded-xl text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition cursor-pointer"
+            title="AI Engine Settings"
+            aria-label="AI Engine Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
         </div>
       </header>
 
@@ -312,6 +325,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </div>
       )}
+
+      {/* AI Settings Modal */}
+      <AISettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+      />
     </div>
   );
 };

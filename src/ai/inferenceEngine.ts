@@ -300,7 +300,24 @@ Batao, aaj kis cheez pe saath kaam karein?`;
 
   // ─── 2. EMOTIONAL SUPPORT & ANXIETY (PRD SECTION: LISTEN & MIXED) ──
 
-  // A) GENERAL TENSION, STRESS, OVERWHELM & ANXIETY (e.g. "feeling completely in tension", "bohot tension ho rahi hai")
+  // A) HOMESICKNESS & MISSING FAMILY ("ghar ki yaad", "homesick", "mummy papa", "hostel")
+  if (
+    /ghar.*(yaad|jaana|chhod|door)|yaad.*(aayi|aa rahi|aarhi)|homesick|mummy.*yaad|maa.*yaad|papa.*yaad|family.*(yaad|miss)|miss.*(home|ghar|family|parents)|hostel.*(mann|akela|bura|khana)|gharwale/i.test(lower)
+  ) {
+    return `Ghar ki yaad aana sabse genuine aur bhaari emotions mein se ek hota hai yaar... 🥺
+
+Jab hum din bhar ki bhag-daud ke baad apne kamre ya hostel mein aate hain, toh wo sannata aur akelapan achanak se hit karta hai. Maa ke haath ka garam khana, papa ki bina kahe aane wali care, bhai-behen ki chhed-chhad, ya bas ghar ke aangan ka sukoon — ye aisi cheezein hain jinka koi replacement nahi hota.
+
+Pehle toh khud ko ye feel karne ki poori permission do. Isme kamzor mehsoos karne ki bilkul zaroorat nahi hai:
+1. **Unhe ek call kar lo:** Agar ho sake toh abhi mummy, papa ya kisi gharwale ko phone mila lo. Bhale hi sirf 2-3 minute unki aawaz sun lo — "bas aise hi call kiya tha, aap kaise ho?". Unki aawaz sunna ekdum grounding hota hai.
+2. **Dil halka hone do:** Agar rona aa raha ho ya gale mein kuch atak raha ho, toh rokna mat. Rone se mann halka hota hai.
+3. **Thoda comfort dhoondo:** Ek cup garam chai ya coffee bana lo, kuch achha kha lo, ya unki koi purani photo ya message dekh lo.
+4. **Ek baat yaad rakhna:** Tum ghar se door kisi maqsad se aaye ho — apne aur unke sapno ko poora karne ke liye. Wo jahan bhi hain, unka pyaar aur aashirwad hamesha tumhare saath hai.
+
+Abhi sabse zyada kis cheez ki yaad satayi — mummy ke khane ki, unse baat karne ki, ya bas ghar pe hone ke sukoon ki? Main yahin hoon, bolo jo dil mein hai.`;
+  }
+
+  // B) GENERAL TENSION, STRESS, OVERWHELM & ANXIETY (e.g. "feeling completely in tension", "bohot tension ho rahi hai")
   if (
     /tension|stress|stressed|anxious|anxiety|ghabrahat|nervous|pareshan|panic|overwhelmed|overwhelm|darr lag/i.test(lower) &&
     !lower.includes('surface tension')
@@ -342,7 +359,7 @@ Kya cheez sabse zyada load de rahi hai abhi? Koi specific baat hui hai (padhai, 
 Jo bhi ho, bina kisi filter ke bol sakte ho — main yahan hoon aur poori tarah sun raha hoon.`;
   }
 
-  // B) SADNESS / FEELING DOWN / CRYING
+  // C) SADNESS / FEELING DOWN / CRYING
   if (/sad|feeling down|mood off|mood kharab|rona aa raha|crying|upset|dil bhaari|dil toot/i.test(lower)) {
     return `Mann udaas hona ya ro dene ka mann karna bilkul human hai. Aise din aate hain jab sab theek chalte hue bhi andar se sab khali ya bhaari lagne lagta hai.
 
@@ -351,7 +368,7 @@ Yahan kisi formality ki zaroorat nahi hai, aur na hi tumhe brave dikhne ki zaroo
 Kya hua hai aaj? Koi baat chubh gayi, ya pichle kuch dinon ka stress ab achanak hit kar raha hai?`;
   }
 
-  // C) CONFUSED / LOST / DIRECTIONLESS
+  // D) CONFUSED / LOST / DIRECTIONLESS
   if (/confused|lost hu|directionless|kuch samajh nahi aa raha|kya karun samajh nahi/i.test(lower)) {
     return `Ye "lost" wali feeling bohot scary lag sakti hai, par actually ye ek sign hai ki tum abhi ek transition phase mein ho.
 
@@ -360,8 +377,8 @@ Jab puraane tareeqe kaam nahi karte aur naya rasta abhi clear nahi dikhta, toh d
 Kis cheez ko lekar sabse bada confusion hai abhi? Thoda detail batao, hum saath mein baith kar isko unpack karte hain.`;
   }
 
-  // C) LONELINESS & OVERTHINKING
-  if (/akela|lonely|alone|koi dost nahi|isolated|koi samajhta nahi/i.test(lower)) {
+  // E) LONELINESS & OVERTHINKING
+  if (/akela|lonely|alone|koi dost nahi|isolated|koi samajhta nahi|left out/i.test(lower)) {
     return `Akelepan ki feeling bohot heavy hoti hai, aur isko mehsoos karna bilkul valid hai.
 
 Aksar hum bheed mein hokar bhi akela feel karte hain jab lagta hai ki humare andar kya chal raha hai, wo koi actually sun ya samajh nahi raha. Par yaad rakhna: akela feel karne ka matlab ye nahi hai ki tum akele rehne ke liye bane ho.
@@ -369,7 +386,23 @@ Aksar hum bheed mein hokar bhi akela feel karte hain jab lagta hai ki humare and
 Yahan tumhe koi judge nahi karega. Jo mann mein ho, bina filter bol sakte ho. Kya kuch specific hua hai aaj, ya ye feeling pichle kuch dinon se gradually ban rahi hai?`;
   }
 
-  // D) BURNOUT & DEMOTIVATION
+  // F) SELF-DOUBT, LOSER / FAILURE COMPARISON TRAP
+  if (/loser|worthless|kisi kaam ka nahi|kuch nahi kar paya|sab aage nikal gaye|failure feel|piche reh gaya|inferior|incompetent|self doubt/i.test(lower)) {
+    return `Ye thought bohot painful hoti hai, par ek sach bataun: tum bilkul bhi loser nahi ho.
+
+Aksar jab hum doosron ki highlight reel (LinkedIn posts, Instagram stories, ya doston ke placement packages) dekhte hain, toh hum unke top moment ko apne lowest moment se compare karne lagte hain. Ye human brain ka sabse bada psychological trap hai.
+
+Sach ye hai:
+- Zindagi koi sprint race nahi hai jahan sabko ek hi time par finish line cross karni ho.
+- Har kisi ka curve alag hota hai — jo log 21 mein successful lagte hain wo 25 mein restart kar rahe hote hain, aur jo 25 mein struggle kar rahe hote hain wo 28 mein shine karte hain.
+- Aaj tumhara ek rough phase chal raha hai, iska matlab ye nahi ki tum rough insaan ho.
+
+Ek chhota reset karein: Aaj ke din sirf ek chhota sa kaam chun lo (kisi topic ka ek page padhna, 15 minute exercise, ya bas ek task complete karna). Momentum self-doubt ko tod deta hai.
+
+Sabse zyada comparison kis baat se feel ho raha hai abhi?`;
+  }
+
+  // G) BURNOUT & DEMOTIVATION
   if (/thak gaya|burnout|mann nahi lag raha|give up|demotivated|himmat nahi|sab chhodne/i.test(lower)) {
     return `Ruko, ek gehri saans lo. Agar thak gaye ho, toh aaram karna seekho — give up karna solution nahi hai.
 
@@ -380,7 +413,19 @@ Aaj ke liye khud ko thoda space do. Jo hona hai wo kal bhi ho sakta hai. Abhi sa
 Kya cheez tumhari saari energy drain kar rahi hai sabse zyada?`;
   }
 
-  // E) NIGHT OVERTHINKING & SLEEP ISSUES
+  // H) PROCRASTINATION & PHONE / SCROLLING ADDICTION
+  if (/procrastinat|phone bohot chalata|scrolling|time waste|focus nahi ho raha|distraction|insta.*time waste/i.test(lower)) {
+    return `Procrastination laziness nahi hoti yaar — ye emotional avoidance hoti hai. Jab dimaag ko lagta hai ki task difficult, boring ya overwhelming hai, toh wo quick dopamine ke liye phone ya scrolling ki taraf bhaagta hai.
+
+Is loop ko todne ka proven formula:
+1. **The 5-Minute Rule:** Khud se kaho: "Main bas 5 minute padhunga ya kaam karunga. Agar 5 minute baad band karna ho toh band kar dunga." 80% times, ek baar start karne ke baad inertia toot jata hai aur tum continue karte ho.
+2. **Physical Distance:** Phone ko doosre room mein ya drawer mein daal do. "Out of sight, out of mind" biological reality hai.
+3. **Micro Task:** Pura chapter mat dekho, sirf agla 1 page ya 1 function dekho.
+
+Abhi kaunsa ek task hai jo sabse zyada pending pada hai? Aao pehle uske pehle 5 minute se shuru karein!`;
+  }
+
+  // I) NIGHT OVERTHINKING & SLEEP ISSUES
   if (/neend nahi|insomnia|dimaag shant nahi|so nahi pa raha|overthinking ho rahi/i.test(lower)) {
     return `Raat ke waqt dimaag un saari baton ko loud volume mein play karne lagta hai jinhe hum din mein ignore karte hain.
 
@@ -391,8 +436,59 @@ Ek simple technique try karo:
 Aaj ke din ki tension abhi raat mein solve nahi hone wali. Khud ko sone ki permission do — subah fresh dimaag se sab tackle karenge.`;
   }
 
-  // F) BREAKUP & RELATIONSHIPS
-  if (/breakup|relationship|dhokha|dost se ladai|heartbreak|chhod ke chali gayi|chhod ke chala gaya/i.test(lower)) {
+  // J) FRIENDSHIP CONFLICT & FEELING LEFT OUT / BETRAYED
+  if (/dost.*(ladai|chhod|dhokha|ignore|naraz|fake)|fake friend|dosti toot|kisi ne baat band|ignore kar raha/i.test(lower)) {
+    return `Doston ke sath jhagda ya kisi close friend se ignore hona dimaag ko bohot deeply affect karta hai.
+
+Jab hum kisi par trust karte hain aur wahan se cold behavior milta hai, toh rejection aur confusion dono ek sath hit karte hain.
+
+Aise moments mein:
+1. **Immediate Reaction mat do:** Gusse ya hurt hokar lamba message bhejne se mostly baat aur bigadti hai. Thoda time aur space do.
+2. **Intent vs Impact dekho:** Kya wo sach mein hurtful hona chahte the, ya wo khud kisi stress ya misunderstanding mein hain?
+3. **Tumhari self-worth kisi ke validation par depend nahi karti:** Jo log tumhari respect aur value karte hain, wahi true friends bante hain.
+
+Kya exact baat hui thi dost ke saath? Bolo, hum milke situation samajhte hain.`;
+  }
+
+  // K) ANGER, IRRITATION & FRUSTRATION
+  if (/gussa aa raha|bohot gussa|chidh|frustrated|irritated|sabpe gussa|phootne ka mann/i.test(lower)) {
+    return `Gussa aana ek naturally valid reaction hai — gussa aksar tab aata hai jab humare sath kuch unfair hua ho, ya jab humari limits cross ho gayi hon.
+
+Par gusse ko apne andar hold karke rakhna ya achanak blast karna dono humara hi nuksan karte hain.
+
+Abhi ke liye:
+1. Screen ya us jagah se 5 minute ke liye uth jao.
+2. Ek thanda glass paani piyo.
+3. 3 lambi gehre saansein lo — jab heartbeat slow hoti hai, toh dimaag rational control wapas le leta hai.
+
+Kis baat ne sabse zyada trigger kiya abhi? Yahan bindaas gussa nikaal sakte ho, koi judge nahi karega.`;
+  }
+
+  // L) JOB / INTERVIEW / PLACEMENT REJECTIONS
+  if (/reject ho gaya|rejection|interview me nikaal|shortlist nahi|off campus|naukri nahi lag/i.test(lower)) {
+    return `Rejection sunna sach mein dil tod deta hai yaar. Especially jab humne preparation mein din-raat ek kiya ho aur ummeed laga rakhi ho... ye pain bilkul real hai.
+
+Par ek baat sachai se samajh lo:
+- Rejection is not a reflection of your intelligence or your potential. Companies ke 100 internal constraints hote hain (budget, quotas, headcount freezes) jo candidate ke haath mein nahi hote.
+- Ek rejection sirf ek "Not this door" hai, "Not anywhere" nahi. Har successful engineer, founder aur professional ne dozens of rejections face kiye hain.
+- Rejection feedback hota hai, final full-stop nahi.
+
+Aaj khud ko thoda rest do. Gussa, dukh jo bhi feel ho raha hai, use process karo. Kal se fresh nazar se resume tweak karenge aur agle apply par kaam karenge.
+
+Kaunse interview ya company ka result tha ye?`;
+  }
+
+  // M) CELEBRATION & GOOD NEWS ("aaj bohot khush hoon", "pass ho gaya", "selected")
+  if (/bohot khush|happy|achha lag raha|good news|selected|placement ho gaya|clear ho gaya|pass ho gaya|offer letter/i.test(lower)) {
+    return `Woohoo! 🎉 Ye sun kar bohot khushi hui! Bohot bohot congratulations! 🥳
+
+Jab hum mehnat karte hain aur uska fal milta hai, toh wo feeling sach mein unmatched hoti hai. Is moment ko poori tarah celebrate karo aur enjoy karo — tum iske haqdaar ho!
+
+Kis cheez ka result aaya hai ya kya kamaal ki baat hui hai? Pura share karo, main celebrate karne ke liye bilkul tayyar hoon! ✨`;
+  }
+
+  // N) BREAKUP & RELATIONSHIPS
+  if (/breakup|relationship|dhokha|heartbreak|chhod ke chali gayi|chhod ke chala gaya/i.test(lower)) {
     return `Ye ek bohot deep pain hai. Jab koi insaan jo hamari routine ka hissa tha achanak chala jata hai, toh ek bada void feel hota hai.
 
 Abhi ke liye sabse important:
@@ -647,7 +743,118 @@ Paudhe sunlight, paani aur carbon dioxide ka use karke apna khana (glucose) aur 
 **Kahan hota hai:** Leaves ke andar **Chloroplasts** mein, jisme green pigment **Chlorophyll** sunlight trap karta hai.`;
   }
 
-  // ─── 6. DYNAMIC CONCEPT & KNOWLEDGE EXPLAINER ─────────────────────
+  // ─── 6. DYNAMIC MATH & ARITHMETIC ENGINE ───────────────────────────
+  // Percentage calculation: e.g. "what is 15% of 800" or "20 percent of 500"
+  const percentMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:%|percent)\s*(?:of|ka)\s*(\d+(?:\.\d+)?)/i);
+  if (percentMatch) {
+    const p = parseFloat(percentMatch[1]);
+    const total = parseFloat(percentMatch[2]);
+    const res = (p / 100) * total;
+    return `## Calculation Result: ${p}% of ${total}
+
+**Answer:** **${res}**
+
+### Step-by-Step Working:
+1. **Formula:** $$\\text{Percentage} = \\frac{\\text{Rate}}{100} \\times \\text{Total}$$
+2. **Calculation:** $$\\frac{${p}}{100} \\times ${total} = ${res}$$
+
+Toh ${total} ka ${p}% barabar hoga **${res}**.`;
+  }
+
+  // Basic arithmetic: e.g. "15 * 12", "25 + 75", "100 / 4", "2 + 2"
+  const mathMatch = original.match(/(\d+(?:\.\d+)?)\s*([\+\-\*\/xX]|\bplus\b|\bminus\b|\btimes\b|\bdivided by\b)\s*(\d+(?:\.\d+)?)/i);
+  if (mathMatch && !lower.includes('ohm') && !lower.includes('faraday') && !lower.includes('v =')) {
+    const a = parseFloat(mathMatch[1]);
+    const b = parseFloat(mathMatch[3]);
+    const opStr = mathMatch[2].toLowerCase();
+    let result: number | string = 0;
+    let opSymbol = '+';
+    if (opStr === '+' || opStr === 'plus') {
+      result = a + b;
+      opSymbol = '+';
+    } else if (opStr === '-' || opStr === 'minus') {
+      result = a - b;
+      opSymbol = '-';
+    } else if (opStr === '*' || opStr === 'x' || opStr === 'times') {
+      result = a * b;
+      opSymbol = '×';
+    } else if (opStr === '/' || opStr === 'divided by') {
+      result = b !== 0 ? (a / b) : 'Undefined (Cannot divide by zero)';
+      opSymbol = '÷';
+    }
+    return `## Math Calculation: ${a} ${opSymbol} ${b}
+
+**Answer:** **${result}**
+
+### Calculation:
+$$${a} ${opSymbol} ${b} = ${result}$$
+
+Koi aur calculation ya numerical formula solve karna ho toh bindaas batao!`;
+  }
+
+  // Square root: e.g. "sqrt of 144" or "square root of 25"
+  const sqrtMatch = lower.match(/(?:sqrt|square root|under root)(?:\s*of)?\s*(\d+(?:\.\d+)?)/i);
+  if (sqrtMatch) {
+    const val = parseFloat(sqrtMatch[1]);
+    const res = Math.sqrt(val);
+    return `## Square Root of ${val}
+
+**Answer:** **${res}**
+
+$$\\sqrt{${val}} = ${res}$$`;
+  }
+
+  // ─── 7. GENERAL KNOWLEDGE & SCIENCE HIGHLIGHTS ──────────────────────
+
+  // Speed of light
+  if (/speed of light|light ki speed/i.test(lower)) {
+    return `## Speed of Light ($c$)
+
+Vacuum (nirvaat) mein light ki speed hoti hai:
+$$\\mathbf{c \\approx 3 \\times 10^8 \\text{ meters/second}}$$
+Yaani lagbhag **3,00,000 kilometers per second**!
+
+* **Sunlight reach time:** Surya ki roshni ko Dharti tak aane mein lagbhag **8 minute 20 second** lagte hain.
+* **Einstein's Formula:** Einstein ki mass-energy equivalence equation ($E = mc^2$) mein $c$ speed of light ko hi denote karta hai.`;
+  }
+
+  // World Capitals
+  const capitalMatches: Record<string, { capital: string; country: string }> = {
+    france: { capital: 'Paris', country: 'France' },
+    japan: { capital: 'Tokyo', country: 'Japan' },
+    usa: { capital: 'Washington, D.C.', country: 'United States of America' },
+    'united states': { capital: 'Washington, D.C.', country: 'United States' },
+    germany: { capital: 'Berlin', country: 'Germany' },
+    russia: { capital: 'Moscow', country: 'Russia' },
+    china: { capital: 'Beijing', country: 'China' },
+    uk: { capital: 'London', country: 'United Kingdom' },
+    australia: { capital: 'Canberra', country: 'Australia' },
+    italy: { capital: 'Rome', country: 'Italy' },
+    canada: { capital: 'Ottawa', country: 'Canada' },
+    spain: { capital: 'Madrid', country: 'Spain' },
+  };
+
+  for (const [key, info] of Object.entries(capitalMatches)) {
+    if (lower.includes('capital') && lower.includes(key)) {
+      return `**${info.country}** ki capital (rajdhani) **${info.capital}** hai. 🏛️`;
+    }
+  }
+
+  // Study Techniques: Feynman Technique
+  if (lower.includes('feynman') || (lower.includes('study') && lower.includes('technique'))) {
+    return `## The Feynman Technique (Study Smarter)
+
+Richard Feynman ka study framework duniya ka sabse effective learning model hai:
+
+1. **Step 1: Choose the Concept:** Jo topic samajhna hai use ek blank page ke top par likho.
+2. **Step 2: Teach it to a 12-Year-Old:** Bina jargon ya complex definitions ke, aisi bhasha mein explain karo jaise kisi 6th class ke bachhe ko samjha rahe ho.
+3. **Step 3: Identify Gaps:** Jahan atko ya jahan book ki technical bhasha copy karni pade, wahan wapas book kholo aur concept clear karo.
+4. **Step 4: Simplify & Create Analogies:** Simple analogies banao (jaise current = flowing water, resistance = pipe ka narrowing).
+
+Konsa topic is technique se todna hai abhi?`;
+  }
+
+  // ─── 8. DYNAMIC CONCEPT & KNOWLEDGE EXPLAINER ─────────────────────
   // Handles ANY question of format "what is X", "explain X", "tell me about X", etc.
   if (/^(what is|what's|explain|define|tell me about|meaning of|kya hai|kya hota hai)\b/i.test(lower)) {
     const topic = original
@@ -706,17 +913,19 @@ Jab do similar cheezon ko compare karte hain, toh 3 main parameters dekhe jaate 
 Kya specific terms batana chahoge jinhe detail tabular format mein compare karna hai?`;
   }
 
-  // ─── 7. ADAPTIVE CONVERSATIONAL FALLBACK ───────────────────────────
+  // ─── 9. ADAPTIVE CONVERSATIONAL FALLBACK (SMART NLP) ───────────────
   if (mode === 'listen') {
-    return `Main poori tarah sun raha hoon. Aise moments mein jab mann bhaari ya bechain ho, toh kisi formality ya unsolicited advice ki zaroorat nahi hoti.
+    return `Main poori tarah sun raha hoon yaar. Aise moments mein jab mann bhaari ho ya dil bechain lage, toh kisi formality ya unsolicited advice ki zaroorat nahi hoti.
 
-Jo bhi mann mein chal raha hai, bindaas express karo — yahan zero judgment hai. Main sun raha hoon, bolo kya baat hai?`;
+Jo tumne kaha — "${original.length > 70 ? original.slice(0, 70) + '...' : original}" — main samajh sakta hoon ki andar kaisa feel ho raha hoga. Yahan tum bilkul safe ho, aur zero judgment hai.
+
+Agar mann kare toh thoda aur dil ki baat bahar nikalne do. Kya cheez sabse zyada bhaari lag rahi hai andar? Main poore dhyan se sun raha hoon.`;
   }
 
   if (mode === 'think') {
     return `Ye decision kaafi important lagta hai, aur aise matters mein pause lena hi sabse smart move hota hai.
 
-Tumhare dimaag mein sabse bada doubt ya darr kya hai is decision ko lekar? Wahan se hum milke iske pros aur cons evaluate karte hain.`;
+Tumhare dimaag mein sabse bada doubt ya darr kya hai "${original.length > 50 ? original.slice(0, 50) + '...' : original}" ko lekar? Wahan se hum milke iske pros aur cons evaluate karte hain.`;
   }
 
   if (mode === 'mixed') {
@@ -729,15 +938,15 @@ Kya pehle thoda mann halka karna chahte ho baat karke, ya seedha practical probl
     return `Tumne **"${original}"** ke baare mein poocha hai.
 
 Ye topic/concept kaafi zaroori hai. Aao isko basic terms mein breakdown karte hain:
-1. **Core Concept:** Iska main objective aur fundamental principle kya hai.
-2. **Working / Formula:** Iske underlying working principles ya mathematical rules.
-3. **Real-world Application:** Iska practical use daily life, engineering ya syllabus mein.
+1. **Core Concept:** Iska fundamental objective aur purpose kya hai.
+2. **Working Mechanism:** Ye process andar se kaise kaam karta hai.
+3. **Real-world Context:** Iska practical use daily life, studies ya technical implementation mein.
 
-Agar is par koi specific numerical, code example ya step-by-step doubt solve karna ho, toh bindaas batao — main poora explain karunga!`;
+Agar is par koi specific doubt, exam pattern, ya code/numerical example dekhna ho, toh batao — hum isko poora clear kar lenge!`;
   }
 
   // Thoughtful, warm natural conversational response
-  return `Maine tumhari baat dhyan se samjhi.
+  return `Maine tumhari baat dhyan se samjhi: "${original.length > 60 ? original.slice(0, 60) + '...' : original}".
 
 Is baare mein thoda aur detail share karna chahoge? Chahe koi doubt clear karna ho, kisi concept ko simple bhasha mein samajhna ho, ya bas apna thought process discuss karna ho — main yahan hoon.`;
 }
@@ -1071,8 +1280,11 @@ export class InferenceEngine {
       accumulated += words[i];
       onChunk(words[i], accumulated);
 
-      const delay = 10 + Math.random() * 12;
-      await new Promise(r => setTimeout(r, delay));
+      // Snappy, natural typing cadence without freezing the user
+      if (words[i].trim().length > 0 && i % 2 === 0) {
+        const delay = 5 + Math.random() * 5;
+        await new Promise(r => setTimeout(r, delay));
+      }
     }
 
     return { text: accumulated, mode };

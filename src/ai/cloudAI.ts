@@ -60,8 +60,9 @@ export async function streamPollinationsAI(
   onChunk: (delta: string, full: string) => void,
   signal?: AbortSignal
 ): Promise<string> {
+  // Ultra-fast connection timeout (2.0s) so user is never stuck waiting on network issues
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 2000);
 
   const onAbort = () => controller.abort();
   if (signal) signal.addEventListener('abort', onAbort);
@@ -73,7 +74,7 @@ export async function streamPollinationsAI(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'openai',
+        model: 'openai-fast',
         messages,
         temperature: 0.7,
         stream: true,
@@ -93,9 +94,9 @@ export async function streamPollinationsAI(
     console.warn('[SSE Pollinations stream attempt failed, switching to direct]:', err?.message);
   }
 
-  // Fast resilient fallback: Direct Pollinations POST
+  // Fast direct fallback (1.8s timeout)
   const fallbackController = new AbortController();
-  const fbTimeout = setTimeout(() => fallbackController.abort(), 15000);
+  const fbTimeout = setTimeout(() => fallbackController.abort(), 1800);
   if (signal) signal.addEventListener('abort', () => fallbackController.abort());
 
   try {

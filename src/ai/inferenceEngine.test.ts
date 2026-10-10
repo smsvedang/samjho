@@ -178,6 +178,37 @@ describe('instant zero-download AI path', () => {
 
     expect(result.text).toContain('Akelepan');
     expect(mocks.createEngine).not.toHaveBeenCalled();
-  });
+  }, 15000);
+
+  it('handles homesickness queries with deep empathy and warmth on fallback', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
+
+    const inference = new InferenceEngine();
+    const result = await inference.generateResponse('ghar ki bahot yaad aarhi hai yrr', vi.fn());
+
+    expect(result.text).toContain('Ghar ki yaad');
+    expect(result.text).toContain('mummy');
+    expect(mocks.createEngine).not.toHaveBeenCalled();
+  }, 15000);
+
+  it('calculates math expressions and percentages dynamically', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
+
+    const inference = new InferenceEngine();
+    const result = await inference.generateResponse('what is 20% of 1500', vi.fn());
+
+    expect(result.text).toContain('300');
+    expect(mocks.createEngine).not.toHaveBeenCalled();
+  }, 15000);
+
+  it('answers GK questions like capitals and science constants accurately', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
+
+    const inference = new InferenceEngine();
+    const result = await inference.generateResponse('capital of France kya hai', vi.fn());
+
+    expect(result.text).toContain('Paris');
+    expect(mocks.createEngine).not.toHaveBeenCalled();
+  }, 15000);
 });
 
